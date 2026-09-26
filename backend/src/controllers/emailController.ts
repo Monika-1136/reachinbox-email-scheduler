@@ -6,7 +6,7 @@ import { parseEmailList } from '../utils/csvParser';
 import { prisma } from '../config/db';
 
 export const scheduleEmailSchema = z.object({
-  senderId: z.string().uuid('Invalid sender ID format'),
+  senderId: z.string().min(1, 'Sender ID is required'),
   subject: z.string().min(1, 'Subject is required'),
   body: z.string().min(1, 'Body is required'),
   recipients: z.array(z.string()).min(1, 'At least one recipient is required'),

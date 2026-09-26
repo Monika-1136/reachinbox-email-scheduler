@@ -55,7 +55,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [token]);
 
   const loginWithGoogle = () => {
-    window.location.href = '/api/auth/google';
+    const apiBase = (import.meta as any).env?.VITE_API_URL || '';
+    window.location.href = `${apiBase}/api/auth/google`;
   };
 
   const loginWithDev = async (email = 'demo@reachinbox.ai', name = 'ReachInbox Demo User') => {
