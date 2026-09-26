@@ -63,7 +63,7 @@ export const SentEmailTable: React.FC<SentEmailTableProps> = ({
               <th className="py-3.5 px-4">Subject</th>
               <th className="py-3.5 px-4">Delivered Time</th>
               <th className="py-3.5 px-4">Status</th>
-              <th className="py-3.5 px-5 text-right">Ethereal SMTP Preview</th>
+              <th className="py-3.5 px-5 text-right">Delivery Mode / Preview</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#1F2433]/60 text-xs">
@@ -120,13 +120,18 @@ export const SentEmailTable: React.FC<SentEmailTableProps> = ({
                         href={email.etherealUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-500/10 hover:bg-brand-500/20 text-brand-400 hover:text-brand-300 border border-brand-500/20 rounded-xl text-xs font-medium transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-brand-500/10 hover:bg-brand-500/20 text-brand-400 hover:text-brand-300 border border-brand-500/20 rounded-xl text-xs font-medium transition-colors"
                       >
-                        <span>View in Ethereal</span>
+                        <span>Ethereal Preview</span>
                         <ExternalLink className="w-3 h-3" />
                       </a>
+                    ) : isSent ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 rounded-xl text-[11px] font-semibold">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                        Real SMTP Delivered
+                      </span>
                     ) : (
-                      <span className="text-gray-500 text-xs italic">No preview URL</span>
+                      <span className="text-gray-500 text-xs italic">Failed / No dispatch</span>
                     )}
                   </td>
                 </tr>

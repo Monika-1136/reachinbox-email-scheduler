@@ -50,17 +50,25 @@ async function bootstrap() {
     if (isGoogleConfigured) {
       console.log('Google OAuth:   CONFIGURED');
     } else {
-      console.log('Google OAuth:   MISSING (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET not set)');
+      console.log('Google OAuth:   MISSING (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET not set in .env)');
     }
-    if (isSmtpCustom) {
-      console.log(`Ethereal SMTP:  CONFIGURED (${config.smtp.user})`);
+    if (config.smtp.provider === 'real') {
+      if (isSmtpCustom) {
+        console.log(`SMTP Provider:  REAL / CONFIGURED (${config.smtp.host}:${config.smtp.port})`);
+      } else {
+        console.log(`SMTP Provider:  REAL (MISSING CREDENTIALS: set SMTP_USER / SMTP_PASSWORD in .env)`);
+      }
     } else {
-      console.log('Ethereal SMTP:  AUTOMATICALLY GENERATED (Dynamic Ethereal test accounts)');
+      if (isSmtpCustom) {
+        console.log(`SMTP Provider:  ETHEREAL / CONFIGURED (${config.smtp.user})`);
+      } else {
+        console.log('SMTP Provider:  ETHEREAL (Sandbox / Testing Mode - Dynamic preview accounts)');
+      }
     }
     if (isSlackConfigured) {
       console.log('Slack OAuth:    CONFIGURED');
     } else {
-      console.log('Slack OAuth:    MISSING (SLACK_CLIENT_ID / SLACK_CLIENT_SECRET not set)');
+      console.log('Slack OAuth:    MISSING (SLACK_CLIENT_ID / SLACK_CLIENT_SECRET not set in .env)');
     }
     console.log('====================================================\n');
 

@@ -78,7 +78,8 @@ export function createEmailWorker(): Worker<EmailJobData> {
           </div>`,
         });
 
-        const previewUrl = nodemailer.getTestMessageUrl(info) || null;
+        const isRealMode = config.smtp.provider === 'real';
+        const previewUrl = isRealMode ? null : nodemailer.getTestMessageUrl(info) || null;
         const messageId = info.messageId || `reachinbox-${Date.now()}`;
 
         // Verify SMTP acceptance
@@ -92,7 +93,9 @@ export function createEmailWorker(): Worker<EmailJobData> {
         }
 
         console.log(`[EmailWorker] ✅ Email ${emailId} successfully accepted by SMTP for ${recipientEmail}! Message ID: ${messageId}`);
-        if (previewUrl) {
+        if (isRealMode) {
+          console.log(`[EmailWorker] 📬 Dispatched via Real SMTP Provider (${config.smtp.host}) to exact recipient: ${recipientEmail}`);
+        } else if (previewUrl) {
           console.log(`[EmailWorker] 🔗 Ethereal Sandbox Preview URL: ${previewUrl}`);
         }
 

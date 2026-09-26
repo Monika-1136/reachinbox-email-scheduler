@@ -17,25 +17,26 @@ export async function getEmailTransporter(sender?: {
     const isRealMode = config.smtp.provider === 'real';
 
     if (isRealMode) {
-      if (!config.smtp.user || !config.smtp.password) {
-        console.warn('[SMTP] Real SMTP mode requested, but SMTP_USER or SMTP_PASSWORD is not set. Falling back to Ethereal.');
-      } else {
-        console.log(`[SMTP] Initializing REAL SMTP transporter via ${config.smtp.host}:${config.smtp.port} (user: ${config.smtp.user})`);
-        activeTransporter = nodemailer.createTransport({
-          host: config.smtp.host,
-          port: config.smtp.port,
-          secure: config.smtp.secure,
-          auth: {
-            user: config.smtp.user,
-            pass: config.smtp.password,
-          },
-          tls: {
-            rejectUnauthorized: false,
-          },
-        });
-        transporter = activeTransporter;
-        currentFrom = config.smtp.from || `ReachInbox <${config.smtp.user}>`;
+      if (!config.smtp.user || !config.smtp.password || config.smtp.user.includes('your_')) {
+        throw new Error(
+          'Real SMTP mode is configured (SMTP_PROVIDER=real), but valid SMTP_USER or SMTP_PASSWORD is not set in backend/.env. Please configure your SMTP credentials or set SMTP_PROVIDER=ethereal for sandbox testing.'
+        );
       }
+      console.log(`[SMTP] Using configured REAL SMTP provider (${config.smtp.host}:${config.smtp.port})`);
+      activeTransporter = nodemailer.createTransport({
+        host: config.smtp.host,
+        port: config.smtp.port,
+        secure: config.smtp.secure,
+        auth: {
+          user: config.smtp.user,
+          pass: config.smtp.password,
+        },
+        tls: {
+          rejectUnauthorized: false,
+        },
+      });
+      transporter = activeTransporter;
+      currentFrom = config.smtp.from || `ReachInbox <${config.smtp.user}>`;
     }
 
     if (!activeTransporter) {
