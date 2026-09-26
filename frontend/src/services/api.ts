@@ -95,7 +95,9 @@ export const emailsApi = {
     body: string;
     recipients: string[];
     startTime?: string;
-  }): Promise<{ campaignId: string; totalScheduled: number; startTime: string }> => {
+    delayMs?: number;
+    hourlyLimit?: number;
+  }): Promise<{ campaignId: string; totalScheduled: number; startTime: string; delayMs: number }> => {
     const res = await api.post('/api/emails/schedule', data);
     return res.data.data;
   },

@@ -39,6 +39,9 @@ export class EmailService {
       ? new Date()
       : baseStartTime;
 
+    const delayMs = input.delayMs !== undefined ? Math.max(0, Number(input.delayMs)) : 2000;
+    const hourlyLimit = input.hourlyLimit !== undefined ? Math.max(1, Number(input.hourlyLimit)) : 200;
+
     // 3. Create Campaign in DB
     const campaign = await prisma.emailCampaign.create({
       data: {
@@ -46,19 +49,23 @@ export class EmailService {
         subject: input.subject,
         body: input.body,
         startTime: effectiveStartTime,
-        delayMs: 0,
-        hourlyLimit: 999999,
+        delayMs,
+        hourlyLimit,
       },
     });
 
     // 4. Create ScheduledEmail records & BullMQ jobs
     const createdEmails = [];
-    const delayUntilRun = Math.max(0, effectiveStartTime.getTime() - Date.now());
 
     for (let i = 0; i < validRecipients.length; i++) {
       const recipient = validRecipients[i];
       // Deterministic idempotency key: unique per campaign + recipient
       const idempotencyKey = `${campaign.id}:${recipient.toLowerCase()}`;
+
+      // Calculate staggered start time based on delayMs
+      const scheduledTimeMs = effectiveStartTime.getTime() + i * delayMs;
+      const scheduledDate = new Date(scheduledTimeMs);
+      const delayUntilRun = Math.max(0, scheduledTimeMs - Date.now());
 
       // Create DB Record
       const emailRecord = await prisma.scheduledEmail.create({
@@ -69,7 +76,7 @@ export class EmailService {
           recipientEmail: recipient,
           subject: input.subject,
           body: input.body,
-          scheduledAt: effectiveStartTime,
+          scheduledAt: scheduledDate,
           status: 'SCHEDULED',
           idempotencyKey,
         },
@@ -84,7 +91,7 @@ export class EmailService {
         recipientEmail: recipient,
         subject: input.subject,
         body: input.body,
-        hourlyLimit: 999999,
+        hourlyLimit,
       };
 
       // Add to BullMQ delayed jobs
@@ -107,7 +114,7 @@ export class EmailService {
         subject: input.subject,
         body: input.body,
         status: 'SCHEDULED',
-        scheduledAt: effectiveStartTime.toISOString(),
+        scheduledAt: scheduledDate.toISOString(),
         createdAt: emailRecord.createdAt.toISOString(),
       }).catch(() => {});
 
@@ -118,7 +125,7 @@ export class EmailService {
       campaignId: campaign.id,
       totalScheduled: createdEmails.length,
       startTime: effectiveStartTime,
-      delayMs: 0,
+      delayMs,
     };
   }
 

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
+import { prisma } from '../config/db';
 import { findOrCreateGoogleUser, createOrGetDevUser, signupUser, loginUser } from '../services/authService';
 import { config } from '../config/env';
 

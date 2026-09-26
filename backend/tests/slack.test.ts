@@ -3,6 +3,21 @@ import { SlackService } from '../src/services/slackService';
 import { redisClient } from '../src/config/redis';
 import { prisma } from '../src/config/db';
 
+vi.mock('@slack/web-api', () => {
+  const mockPostMessage = vi.fn().mockResolvedValue({ ok: true, ts: '12345.67' });
+  const mockList = vi.fn().mockResolvedValue({ ok: true, channels: [{ id: 'C123456' }] });
+  const mockAccess = vi.fn().mockResolvedValue({ ok: true, access_token: 'xoxb-test' });
+
+  function MockWebClient(this: any) {
+    this.chat = { postMessage: mockPostMessage };
+    this.conversations = { list: mockList };
+    this.oauth = { v2: { access: mockAccess } };
+    return this;
+  }
+
+  return { WebClient: MockWebClient };
+});
+
 describe('SlackService - Live OAuth & Rate-Limit Notifications', () => {
   const userId = 'user-uuid-slack-test';
   const senderId = 'sender-uuid-test';

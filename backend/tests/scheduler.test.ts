@@ -76,11 +76,13 @@ describe('Email Scheduling & BullMQ Delayed Jobs Flow', () => {
     expect(result.totalScheduled).toBe(2);
     expect(addEmailJobSpy).toHaveBeenCalledTimes(2);
 
-    // Both jobs scheduled for the campaign start time
+    // Jobs are staggered by delayMs (2000ms by default)
     const firstCallDelay = addEmailJobSpy.mock.calls[0][1];
     const secondCallDelay = addEmailJobSpy.mock.calls[1][1];
     expect(firstCallDelay).toBeGreaterThan(50000);
-    expect(secondCallDelay).toBe(firstCallDelay);
+    expect(secondCallDelay).toBeGreaterThan(firstCallDelay);
+    expect(secondCallDelay - firstCallDelay).toBeGreaterThanOrEqual(1500);
+    expect(result.delayMs).toBe(2000);
   });
 
   it('demonstrates restart persistence: Redis BullMQ delayed jobs are retained independently of server memory', () => {

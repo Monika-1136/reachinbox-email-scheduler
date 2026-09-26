@@ -11,6 +11,8 @@ export const scheduleEmailSchema = z.object({
   body: z.string().min(1, 'Body is required'),
   recipients: z.array(z.string()).min(1, 'At least one recipient is required'),
   startTime: z.string().or(z.date()).optional(),
+  delayMs: z.number().min(0).optional().default(2000),
+  hourlyLimit: z.number().min(1).optional().default(200),
 });
 
 export class EmailController {

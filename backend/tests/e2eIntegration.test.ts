@@ -9,6 +9,21 @@ import { signToken, verifyToken } from '../src/services/authService';
 import * as queueService from '../src/services/queueService';
 import * as emailTransporter from '../src/config/emailTransporter';
 
+vi.mock('@slack/web-api', () => {
+  const mockPostMessage = vi.fn().mockResolvedValue({ ok: true, ts: '12345.67' });
+  const mockList = vi.fn().mockResolvedValue({ ok: true, channels: [{ id: 'C123456' }] });
+  const mockAccess = vi.fn().mockResolvedValue({ ok: true, access_token: 'xoxb-test' });
+
+  function MockWebClient(this: any) {
+    this.chat = { postMessage: mockPostMessage };
+    this.conversations = { list: mockList };
+    this.oauth = { v2: { access: mockAccess } };
+    return this;
+  }
+
+  return { WebClient: MockWebClient };
+});
+
 describe('END-TO-END ACCEPTANCE INTEGRATION SUITE (8 Core Scenarios)', () => {
   const testUserId = 'user-e2e-12345';
   const testSenderId = 'sender-e2e-12345';
@@ -95,11 +110,12 @@ describe('END-TO-END ACCEPTANCE INTEGRATION SUITE (8 Core Scenarios)', () => {
       expect(result.totalScheduled).toBe(2);
       expect(addEmailJobSpy).toHaveBeenCalledTimes(2);
 
-      // Verify timing: both jobs scheduled for campaign startTime
+      // Verify timing: jobs are staggered by delayMs (2000ms)
       const firstDelay = addEmailJobSpy.mock.calls[0][1];
       const secondDelay = addEmailJobSpy.mock.calls[1][1];
       expect(firstDelay).toBeGreaterThan(0);
-      expect(secondDelay).toBe(firstDelay);
+      expect(secondDelay).toBeGreaterThan(firstDelay);
+      expect(secondDelay - firstDelay).toBeGreaterThanOrEqual(1500);
     });
   });
 

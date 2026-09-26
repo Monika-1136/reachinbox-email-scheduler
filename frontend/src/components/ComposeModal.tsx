@@ -29,6 +29,8 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onS
 
   const [scheduleMode, setScheduleMode] = useState<'now' | 'later'>('now');
   const [customStartTime, setCustomStartTime] = useState<string>('');
+  const [delayMs, setDelayMs] = useState<number>(2000);
+  const [hourlyLimit, setHourlyLimit] = useState<number>(200);
 
   const [showAddSender, setShowAddSender] = useState(false);
   const [newSenderEmail, setNewSenderEmail] = useState('');
@@ -47,6 +49,8 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onS
     setParsedRecipients(null);
     setScheduleMode('now');
     setCustomStartTime('');
+    setDelayMs(2000);
+    setHourlyLimit(200);
     setErrorMessage(null);
     setSuccessMessage(null);
     setShowAddSender(false);
@@ -167,6 +171,8 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onS
         body,
         recipients: currentParsed.validEmails,
         startTime: effectiveStartTime,
+        delayMs: Math.max(0, Number(delayMs) || 0),
+        hourlyLimit: Math.max(1, Number(hourlyLimit) || 200),
       });
 
       setSuccessMessage(`Successfully scheduled ${res.totalScheduled} email(s) with BullMQ!`);
@@ -400,40 +406,79 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onS
             )}
           </div>
 
-          {/* Timing Controls (Cleaned without delay or rate limits) */}
-          <div className="p-4 bg-[#0E1017] border border-[#1F2433] rounded-2xl">
-            <label className="text-xs font-semibold text-gray-300 mb-2 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-brand-400" /> Start Timing
-            </label>
-            <div className="grid grid-cols-2 gap-2 p-1 bg-[#12151F] rounded-xl border border-[#1F2433]">
-              <button
-                type="button"
-                onClick={() => setScheduleMode('now')}
-                className={`py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  scheduleMode === 'now' ? 'bg-brand-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                Send Immediately
-              </button>
-              <button
-                type="button"
-                onClick={() => setScheduleMode('later')}
-                className={`py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  scheduleMode === 'later' ? 'bg-brand-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                Schedule for Future
-              </button>
+          {/* Timing & Rate Limit Controls */}
+          <div className="p-4 bg-[#0E1017] border border-[#1F2433] rounded-2xl space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-gray-300 mb-2 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-brand-400" /> Start Timing
+              </label>
+              <div className="grid grid-cols-2 gap-2 p-1 bg-[#12151F] rounded-xl border border-[#1F2433]">
+                <button
+                  type="button"
+                  onClick={() => setScheduleMode('now')}
+                  className={`py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                    scheduleMode === 'now' ? 'bg-brand-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  Send Immediately
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScheduleMode('later')}
+                  className={`py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                    scheduleMode === 'later' ? 'bg-brand-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  Schedule for Future
+                </button>
+              </div>
+              {scheduleMode === 'later' && (
+                <input
+                  type="datetime-local"
+                  value={customStartTime}
+                  onChange={(e) => setCustomStartTime(e.target.value)}
+                  className="w-full mt-3 bg-[#12151F] border border-[#1F2433] text-xs text-white px-3 py-2 rounded-xl outline-none focus:border-brand-500"
+                  required
+                />
+              )}
             </div>
-            {scheduleMode === 'later' && (
-              <input
-                type="datetime-local"
-                value={customStartTime}
-                onChange={(e) => setCustomStartTime(e.target.value)}
-                className="w-full mt-3 bg-[#12151F] border border-[#1F2433] text-xs text-white px-3 py-2 rounded-xl outline-none focus:border-brand-500"
-                required
-              />
-            )}
+
+            {/* Delay Between Sends & Hourly Limit */}
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-[#1F2433]">
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1">
+                  Delay Between Sends (ms)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="100"
+                  value={delayMs}
+                  onChange={(e) => setDelayMs(Math.max(0, parseInt(e.target.value) || 0))}
+                  placeholder="e.g. 2000"
+                  className="w-full bg-[#12151F] border border-[#1F2433] text-xs text-white px-3 py-2 rounded-xl outline-none focus:border-brand-500 font-mono"
+                  required
+                />
+                <p className="text-[10px] text-gray-500 mt-1">Spreads recipient sends via BullMQ delays</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1">
+                  Hourly Rate Limit
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={hourlyLimit}
+                  onChange={(e) => setHourlyLimit(Math.max(1, parseInt(e.target.value) || 1))}
+                  placeholder="e.g. 200"
+                  className="w-full bg-[#12151F] border border-[#1F2433] text-xs text-white px-3 py-2 rounded-xl outline-none focus:border-brand-500 font-mono"
+                  required
+                />
+                <p className="text-[10px] text-gray-500 mt-1">Reschedules excess to next hour window</p>
+              </div>
+            </div>
           </div>
 
           {/* Submit Button */}

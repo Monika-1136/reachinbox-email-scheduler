@@ -3,8 +3,10 @@ import nodemailer from 'nodemailer';
 import { redisOptions } from '../config/redis';
 import { prisma } from '../config/db';
 import { config } from '../config/env';
-import { EMAIL_QUEUE_NAME } from '../services/queueService';
+import { EMAIL_QUEUE_NAME, addEmailJob } from '../services/queueService';
 import { ElasticService } from '../services/elasticService';
+import { RateLimiterService } from '../services/rateLimiterService';
+import { SlackService } from '../services/slackService';
 import { getEmailTransporter } from '../config/emailTransporter';
 import { EmailJobData } from '../types';
 
@@ -17,6 +19,7 @@ export function createEmailWorker(): Worker<EmailJobData> {
     EMAIL_QUEUE_NAME,
     async (job: Job<EmailJobData>) => {
       const { emailId, campaignId, userId, senderId, senderEmail, recipientEmail, subject, body } = job.data;
+      const hourlyLimit = job.data.hourlyLimit || config.worker.maxEmailsPerHour || 200;
 
       // 1. Idempotency Check & Record Retrieval
       const existingEmail = await prisma.scheduledEmail.findUnique({
@@ -39,7 +42,51 @@ export function createEmailWorker(): Worker<EmailJobData> {
       const activeSenderEmail = sender?.email || senderEmail;
       const activeDisplayName = sender?.displayName || null;
 
-      // 3. Atomically transition to PROCESSING
+      // 3. Atomically check and reserve Hourly Rate Limit slot
+      const hourlySlot = await RateLimiterService.checkAndReserveHourlySlot(senderId, hourlyLimit);
+      if (!hourlySlot.allowed) {
+        const retryDelayMs = hourlySlot.retryDelayMs || RateLimiterService.getMillisecondsUntilNextHour();
+        const nextScheduledDate = new Date(Date.now() + retryDelayMs);
+
+        console.log(
+          `[EmailWorker] ⏳ Hourly rate limit (${hourlyLimit}/hr) reached for sender ${activeSenderEmail}. ` +
+          `Rescheduling email ${emailId} to next window (${nextScheduledDate.toISOString()}).`
+        );
+
+        // Update DB record to next window
+        await prisma.scheduledEmail.update({
+          where: { id: emailId },
+          data: {
+            scheduledAt: nextScheduledDate,
+            status: 'SCHEDULED',
+          },
+        });
+
+        // Re-enqueue delayed job in BullMQ for next hour window
+        const reschedJobId = `${emailId}-resched-${hourlySlot.hourWindow + 1}`;
+        await addEmailJob(
+          { ...job.data, rescheduledCount: (job.data.rescheduledCount || 0) + 1 },
+          retryDelayMs,
+          reschedJobId
+        );
+
+        // Send real Slack alert (deduplicated per sender/hour window, safe if not connected)
+        SlackService.sendRateLimitAlert(
+          userId,
+          senderId,
+          activeSenderEmail,
+          hourlyLimit,
+          hourlySlot.hourWindow
+        ).catch((err) => console.warn('[EmailWorker] Slack alert warning:', err.message));
+
+        return {
+          rescheduled: true,
+          reason: 'hourly_rate_limit_exceeded',
+          nextWindow: nextScheduledDate,
+        };
+      }
+
+      // 4. Atomically transition to PROCESSING
       await prisma.scheduledEmail.update({
         where: { id: emailId },
         data: {
