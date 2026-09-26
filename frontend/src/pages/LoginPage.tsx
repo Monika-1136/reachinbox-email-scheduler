@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   Mail,
+  Lock,
   ShieldCheck,
   Zap,
   Layers,
@@ -10,13 +11,18 @@ import {
   Sparkles,
   AlertCircle,
   Clock,
+  LogIn,
 } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
-  const { user, loginWithGoogle, loginWithDev, loading } = useAuth();
+  const { user, loginWithGoogle, loginWithCredentials, loginWithDev, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [oauthError, setOauthError] = useState<string | null>(null);
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDemoLoggingIn, setIsDemoLoggingIn] = useState(false);
 
   useEffect(() => {
@@ -29,17 +35,38 @@ export const LoginPage: React.FC = () => {
     const params = new URLSearchParams(location.search);
     const error = params.get('error');
     if (error) {
-      setOauthError(decodeURIComponent(error));
+      setErrorMessage(decodeURIComponent(error));
     }
   }, [location]);
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+
+    if (!email.trim() || !password) {
+      setErrorMessage('Please enter both email and password.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await loginWithCredentials(email.trim(), password);
+      navigate('/dashboard');
+    } catch (err) {
+      setErrorMessage((err as Error).message || 'Invalid email or password.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleDemoLogin = async () => {
+    setErrorMessage(null);
     setIsDemoLoggingIn(true);
     try {
-      await loginWithDev('reviewer@reachinbox.ai', 'ReachInbox Reviewer');
+      await loginWithDev('demo@reachinbox.local', 'Demo User');
       navigate('/dashboard');
-    } catch {
-      // ignore
+    } catch (err) {
+      setErrorMessage((err as Error).message || 'Demo login failed.');
     } finally {
       setIsDemoLoggingIn(false);
     }
@@ -59,30 +86,90 @@ export const LoginPage: React.FC = () => {
           </div>
         </div>
 
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">ReachInbox</h1>
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Welcome back</h1>
         <p className="mt-1.5 text-xs sm:text-sm text-gray-400 font-medium">
-          Production-grade Full-Stack Email Job Scheduler
+          Sign in to manage your high-throughput email scheduling queues
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="bg-[#12151F] border border-[#1F2433] py-8 px-6 sm:px-10 rounded-3xl shadow-2xl shadow-black/80 space-y-6">
-          {oauthError && (
+          {errorMessage && (
             <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-300 flex items-start gap-2.5">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
               <div>
-                <p className="font-semibold text-amber-300">Authentication Note</p>
-                <p className="text-[11px] text-amber-400/90 mt-0.5">{oauthError}</p>
+                <p className="font-semibold text-amber-300">Authentication Alert</p>
+                <p className="text-[11px] text-amber-400/90 mt-0.5">{errorMessage}</p>
               </div>
             </div>
           )}
 
-          <div className="space-y-3.5">
+          {/* Email & Password Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 mb-1.5">
+                Email Address
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-gray-500 absolute left-3.5 top-3.5" />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@company.com"
+                  className="w-full pl-10 pr-4 py-2.5 bg-[#0E1017] border border-[#23293B] focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded-xl text-sm text-white placeholder-gray-600 outline-none transition-all"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 mb-1.5">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-gray-500 absolute left-3.5 top-3.5" />
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-10 pr-4 py-2.5 bg-[#0E1017] border border-[#23293B] focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded-xl text-sm text-white placeholder-gray-600 outline-none transition-all"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading || isSubmitting || isDemoLoggingIn}
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-brand-600 hover:bg-brand-500 text-white font-semibold text-sm rounded-xl transition-all shadow-lg shadow-brand-600/30 active:scale-[0.99] disabled:opacity-60"
+            >
+              {isSubmitting ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <>
+                  <LogIn className="w-4 h-4" />
+                  <span>Login</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="relative flex items-center justify-center my-4">
+            <div className="border-t border-[#1F2433] w-full"></div>
+            <span className="bg-[#12151F] px-3 text-[11px] font-medium text-gray-500 uppercase tracking-wider">
+              Or Instant Options
+            </span>
+          </div>
+
+          <div className="space-y-3">
             {/* Real Google OAuth Button */}
             <button
+              type="button"
               onClick={loginWithGoogle}
-              disabled={loading || isDemoLoggingIn}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-[#2E354B] hover:border-gray-500 bg-[#0E1017] hover:bg-[#1A1E2C] text-sm font-semibold text-white rounded-2xl transition-all shadow-lg active:scale-[0.99]"
+              disabled={loading || isSubmitting || isDemoLoggingIn}
+              className="w-full flex items-center justify-center gap-3 px-4 py-2.5 border border-[#2E354B] hover:border-gray-500 bg-[#0E1017] hover:bg-[#1A1E2C] text-sm font-semibold text-white rounded-xl transition-all shadow-md active:scale-[0.99]"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
                 <path
@@ -105,23 +192,17 @@ export const LoginPage: React.FC = () => {
               <span>Continue with Google</span>
             </button>
 
-            <div className="relative flex items-center justify-center my-4">
-              <div className="border-t border-[#1F2433] w-full"></div>
-              <span className="bg-[#12151F] px-3 text-[11px] font-medium text-gray-500 uppercase tracking-wider">
-                Or Instant Dev Access
-              </span>
-            </div>
-
             {/* Instant Demo Login Button */}
             <button
+              type="button"
               onClick={handleDemoLogin}
-              disabled={loading || isDemoLoggingIn}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white text-sm font-semibold rounded-2xl shadow-xl shadow-brand-600/25 transition-all hover:scale-[1.01] active:scale-[0.99]"
+              disabled={loading || isSubmitting || isDemoLoggingIn}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white text-sm font-semibold rounded-xl shadow-lg shadow-brand-600/25 transition-all active:scale-[0.99]"
             >
               {isDemoLoggingIn ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Signing In...</span>
+                  <span>Authenticating...</span>
                 </>
               ) : (
                 <>
@@ -133,29 +214,39 @@ export const LoginPage: React.FC = () => {
             </button>
           </div>
 
+          {/* Signup link */}
+          <div className="text-center pt-2">
+            <p className="text-xs text-gray-400">
+              Don't have an account?{' '}
+              <Link to="/signup" className="text-brand-400 hover:text-brand-300 font-semibold hover:underline">
+                Create an account
+              </Link>
+            </p>
+          </div>
+
           {/* Architecture Badges */}
-          <div className="pt-4 border-t border-[#1F2433] space-y-2.5 text-xs text-gray-400">
+          <div className="pt-4 border-t border-[#1F2433] space-y-2 text-xs text-gray-400">
             <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-brand-400 shrink-0" />
+              <Layers className="w-3.5 h-3.5 text-brand-400 shrink-0" />
               <span>BullMQ + Redis delayed queue persistence across restarts</span>
             </div>
             <div className="flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               <span>Deterministic idempotency prevents duplicate email dispatches</span>
             </div>
             <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>Atomic hourly rate-limiting with real-time Slack alerts</span>
+              <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>Atomic hourly rate-limiting with real-time alerts</span>
             </div>
             <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-blue-400 shrink-0" />
-              <span>Ethereal SMTP delivery & Elasticsearch instant search</span>
+              <Clock className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              <span>Ethereal & Real SMTP with Elasticsearch instant search</span>
             </div>
           </div>
         </div>
 
         <p className="text-center text-xs text-gray-500 mt-6">
-          ReachInbox / Outbox Labs Assessment • Monorepo Architecture
+          ReachInbox Email Scheduler • Monorepo Architecture
         </p>
       </div>
     </div>

@@ -35,8 +35,10 @@ export const config = {
   },
 
   smtp: {
+    provider: (process.env.SMTP_PROVIDER || 'ethereal').toLowerCase(),
     host: process.env.SMTP_HOST || 'smtp.ethereal.email',
     port: parseInt(process.env.SMTP_PORT || '587', 10),
+    secure: process.env.SMTP_SECURE === 'true' || process.env.SMTP_PORT === '465',
     user: process.env.SMTP_USER || '',
     password: process.env.SMTP_PASSWORD || '',
     from: process.env.SMTP_FROM || 'ReachInbox Scheduler <outreach@reachinbox.test>',

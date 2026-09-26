@@ -1,8 +1,56 @@
 import { Request, Response } from 'express';
-import { findOrCreateGoogleUser, createOrGetDevUser } from '../services/authService';
+import { z } from 'zod';
+import { findOrCreateGoogleUser, createOrGetDevUser, signupUser, loginUser } from '../services/authService';
 import { config } from '../config/env';
 
+export const signupSchema = z.object({
+  name: z.string().min(1, 'Full name is required'),
+  email: z.string().email('Please enter a valid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+});
+
+export const loginSchema = z.object({
+  email: z.string().email('Please enter a valid email address'),
+  password: z.string().min(1, 'Password is required'),
+});
+
 export class AuthController {
+  public static async signup(req: Request, res: Response): Promise<void> {
+    const { name, email, password } = req.body;
+    const { user, token } = await signupUser({ name, email, password });
+
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: config.isProd,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      sameSite: 'lax',
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Account created successfully',
+      data: { user, token },
+    });
+  }
+
+  public static async login(req: Request, res: Response): Promise<void> {
+    const { email, password } = req.body;
+    const { user, token } = await loginUser({ email, password });
+
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: config.isProd,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      sameSite: 'lax',
+    });
+
+    res.json({
+      success: true,
+      message: 'Logged in successfully',
+      data: { user, token },
+    });
+  }
+
   public static async getMe(req: Request, res: Response): Promise<void> {
     if (!req.user) {
       res.status(401).json({ success: false, message: 'Not authenticated' });
@@ -107,8 +155,8 @@ export class AuthController {
   public static async devLogin(req: Request, res: Response): Promise<void> {
     const { email, name } = req.body || {};
     const { user, token } = await createOrGetDevUser(
-      email || 'demo@reachinbox.ai',
-      name || 'ReachInbox Demo User'
+      email || 'demo@reachinbox.local',
+      name || 'Demo User'
     );
 
     res.cookie('token', token, {

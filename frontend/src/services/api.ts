@@ -31,6 +31,14 @@ api.interceptors.request.use((config) => {
 
 // Auth Endpoints
 export const authApi = {
+  signup: async (data: { name: string; email: string; password: string }): Promise<{ user: User; token: string }> => {
+    const res = await api.post('/api/auth/signup', data);
+    return res.data.data;
+  },
+  login: async (data: { email: string; password: string }): Promise<{ user: User; token: string }> => {
+    const res = await api.post('/api/auth/login', data);
+    return res.data.data;
+  },
   getMe: async (): Promise<User> => {
     const res = await api.get('/api/auth/me');
     return res.data.data;

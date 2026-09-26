@@ -1,16 +1,8 @@
-import { ParsedCsvRecipient } from '../types';
+import { CsvParseResponse, ParsedCsvRecipient } from '../types';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
 
-export interface CsvParseResult {
-  validEmails: string[];
-  invalidCount: number;
-  duplicateCount: number;
-  totalDetected: number;
-  recipients: ParsedCsvRecipient[];
-}
-
-export function parseEmailList(rawContent: string): CsvParseResult {
+export function parseEmailListClient(rawContent: string): CsvParseResponse {
   if (!rawContent || !rawContent.trim()) {
     return {
       validEmails: [],
@@ -21,8 +13,6 @@ export function parseEmailList(rawContent: string): CsvParseResult {
     };
   }
 
-  // Split by newlines, commas, semicolons, tabs, and spaces
-  // First, extract any angle-bracketed emails like "John Doe <john@example.com>"
   const tokens = rawContent
     .split(/[\r\n,;\t]+/)
     .map((s) => s.trim())
@@ -35,13 +25,11 @@ export function parseEmailList(rawContent: string): CsvParseResult {
   let duplicateCount = 0;
 
   for (const rawToken of tokens) {
-    // If token contains multiple space-separated parts, check if it's "Name <email@domain.com>"
     let candidate = rawToken.replace(/^["']|["']$/g, '').trim();
     const angleBracketMatch = candidate.match(/<([^>]+)>/);
     if (angleBracketMatch) {
       candidate = angleBracketMatch[1].trim();
     } else if (candidate.includes(' ')) {
-      // Split space-separated sub-tokens if multiple emails were entered on one line
       const subTokens = candidate.split(/\s+/).filter(Boolean);
       for (const sub of subTokens) {
         processCandidate(sub);
@@ -55,7 +43,6 @@ export function parseEmailList(rawContent: string): CsvParseResult {
   function processCandidate(candidate: string) {
     if (!candidate) return;
 
-    // Skip CSV header if present (e.g. 'email', 'emails', 'recipient', 'to')
     const lower = candidate.toLowerCase();
     if (['email', 'emails', 'recipient', 'recipients', 'mail', 'to', 'lead', 'leads'].includes(lower)) {
       return;

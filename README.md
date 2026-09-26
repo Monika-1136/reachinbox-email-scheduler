@@ -291,12 +291,27 @@ SLACK_CLIENT_ID=your_slack_client_id
 SLACK_CLIENT_SECRET=your_slack_client_secret
 SLACK_REDIRECT_URI=http://localhost:5000/api/slack/callback
 
-# Ethereal Email SMTP
+# SMTP Modes: Ethereal (Testing) vs Real SMTP (Production Delivery)
+SMTP_PROVIDER=ethereal # Options: 'ethereal' (for sandbox testing) or 'real' (for actual recipient inboxes)
+
+# Mode 1: Ethereal SMTP (Default for Testing / Demos)
+# Messages are processed through Ethereal and a web preview URL is generated
 SMTP_HOST=smtp.ethereal.email
 SMTP_PORT=587
-SMTP_USER=your_ethereal_user@ethereal.email
-SMTP_PASSWORD=your_ethereal_password
+SMTP_SECURE=false
+SMTP_USER=
+SMTP_PASSWORD=
 SMTP_FROM="ReachInbox Scheduler <outreach@reachinbox.test>"
+
+# Mode 2: Real SMTP (Production / Actual Inboxes)
+# To deliver to real recipient addresses (Gmail, Outlook, etc.), set:
+# SMTP_PROVIDER=real
+# SMTP_HOST=smtp.gmail.com
+# SMTP_PORT=587 # or 465 for SSL
+# SMTP_SECURE=false # or true for 465
+# SMTP_USER=your_email@gmail.com
+# SMTP_PASSWORD=your_app_password
+# SMTP_FROM="Your Name <your_email@gmail.com>"
 
 # Elasticsearch
 ELASTICSEARCH_URL=http://localhost:9200
@@ -307,7 +322,10 @@ MIN_EMAIL_DELAY_MS=2000
 MAX_EMAILS_PER_HOUR=200
 ```
 
-*Note: If no Ethereal credentials are provided in `.env`, the backend automatically calls `nodemailer.createTestAccount()` to provision a real Ethereal SMTP account on startup!*
+> **Important on Delivery:**
+> - **Exact Recipient Delivery:** In both modes, the worker sends messages strictly to the exact `recipientEmail` provided in the campaign (`to: recipientEmail`).
+> - **Ethereal Mode:** Ethereal is a safe testing service that traps emails and creates a live inspection URL so no unsolicited test emails are sent during automated testing.
+> - **Real SMTP Mode:** Configure `SMTP_PROVIDER=real` with your valid SMTP credentials to deliver messages to real inboxes.
 
 ---
 

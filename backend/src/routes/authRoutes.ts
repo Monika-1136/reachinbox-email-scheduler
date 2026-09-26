@@ -1,9 +1,12 @@
 import { Router } from 'express';
-import { AuthController } from '../controllers/authController';
+import { AuthController, signupSchema, loginSchema } from '../controllers/authController';
 import { requireAuth } from '../middleware/authMiddleware';
+import { validateBody } from '../middleware/validateMiddleware';
 
 export const authRouter = Router();
 
+authRouter.post('/signup', validateBody(signupSchema), AuthController.signup);
+authRouter.post('/login', validateBody(loginSchema), AuthController.login);
 authRouter.get('/me', requireAuth, AuthController.getMe);
 authRouter.get('/google', AuthController.googleAuth);
 authRouter.get('/google/callback', AuthController.googleCallback);

@@ -20,7 +20,9 @@ export function createEmailWorker(): Worker<EmailJobData> {
     async (job: Job<EmailJobData>) => {
       const { emailId, campaignId, userId, senderId, senderEmail, recipientEmail, subject, body, hourlyLimit } = job.data;
 
-      console.log(`[Worker] Processing Job ${job.id} for email ${emailId} to ${recipientEmail}`);
+      console.log(
+        `[Worker] 📧 Safe Dispatch => Campaign: ${campaignId} | EmailId: ${emailId} | JobId: ${job.id} | Recipient: ${recipientEmail} | Sender: ${senderEmail}`
+      );
 
       // 1. Idempotency Check & Atomic State Transition
       // We perform an atomic query: only transition to PROCESSING if status != 'SENT'

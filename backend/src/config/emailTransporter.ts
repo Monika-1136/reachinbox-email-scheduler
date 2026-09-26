@@ -12,13 +12,38 @@ export async function getEmailTransporter(): Promise<{
     return { transporter, fromAddress: currentFrom };
   }
 
-  const hasCustomCredentials =
+  const isRealMode = config.smtp.provider === 'real';
+
+  if (isRealMode) {
+    if (!config.smtp.user || !config.smtp.password) {
+      console.warn('[SMTP] Real SMTP mode requested, but SMTP_USER or SMTP_PASSWORD is not set. Falling back to Ethereal.');
+    } else {
+      console.log(`[SMTP] Initializing REAL SMTP transporter via ${config.smtp.host}:${config.smtp.port} (user: ${config.smtp.user})`);
+      transporter = nodemailer.createTransport({
+        host: config.smtp.host,
+        port: config.smtp.port,
+        secure: config.smtp.secure,
+        auth: {
+          user: config.smtp.user,
+          pass: config.smtp.password,
+        },
+        tls: {
+          rejectUnauthorized: false,
+        },
+      });
+      currentFrom = config.smtp.from || `ReachInbox <${config.smtp.user}>`;
+      return { transporter, fromAddress: currentFrom };
+    }
+  }
+
+  // Ethereal Mode: Check if custom ethereal credentials provided in env
+  const hasCustomEthereal =
     config.smtp.user &&
     config.smtp.password &&
     !config.smtp.user.includes('your_') &&
     !config.smtp.password.includes('your_');
 
-  if (hasCustomCredentials) {
+  if (hasCustomEthereal) {
     transporter = nodemailer.createTransport({
       host: config.smtp.host,
       port: config.smtp.port,
@@ -35,9 +60,9 @@ export async function getEmailTransporter(): Promise<{
     return { transporter, fromAddress: currentFrom };
   }
 
-  // If no credentials supplied in .env, dynamically provision a real Ethereal test account!
+  // If no credentials supplied, dynamically provision a real Ethereal test account!
   try {
-    console.log('[SMTP] No valid SMTP credentials in .env. Creating real Ethereal test account dynamically...');
+    console.log('[SMTP] Provisioning dynamic Ethereal test account...');
     const testAccount = await nodemailer.createTestAccount();
     transporter = nodemailer.createTransport({
       host: 'smtp.ethereal.email',
@@ -52,17 +77,19 @@ export async function getEmailTransporter(): Promise<{
       },
     });
     currentFrom = `ReachInbox Scheduler <${testAccount.user}>`;
-    console.log(`[SMTP] Real Ethereal account created: ${testAccount.user}`);
+    console.log(`[SMTP] Dynamic Ethereal account ready: ${testAccount.user}`);
     return { transporter, fromAddress: currentFrom };
   } catch (error) {
-    console.warn('[SMTP] Fallback transporter creation warning:', (error as Error).message);
-    // Return standard fallback
+    console.warn('[SMTP] Dynamic Ethereal provisioning error:', (error as Error).message);
     transporter = nodemailer.createTransport({
       host: config.smtp.host,
       port: config.smtp.port,
       auth: {
         user: config.smtp.user,
         pass: config.smtp.password,
+      },
+      tls: {
+        rejectUnauthorized: false,
       },
     });
     return { transporter, fromAddress: currentFrom };

@@ -71,4 +71,35 @@ describe('Auth Service & Middleware', () => {
     expect(nextCalled).toBe(true);
     expect(req.user?.id).toBe(mockUser.id);
   });
+
+  it('signs up a user with bcrypt hashed password and allows subsequent login', async () => {
+    const { signupUser, loginUser } = await import('../src/services/authService');
+    const testEmail = `test-user-${Date.now()}@reachinbox.test`;
+    const testPass = 'SecurePass123!';
+
+    const signupResult = await signupUser({
+      name: 'Test Auth User',
+      email: testEmail,
+      password: testPass,
+    });
+
+    expect(signupResult.user.email).toBe(testEmail);
+    expect(signupResult.token).toBeDefined();
+
+    // Login with correct credentials
+    const loginResult = await loginUser({
+      email: testEmail,
+      password: testPass,
+    });
+    expect(loginResult.user.id).toBe(signupResult.user.id);
+    expect(loginResult.token).toBeDefined();
+
+    // Login with wrong password should fail
+    await expect(
+      loginUser({
+        email: testEmail,
+        password: 'WrongPassword!',
+      })
+    ).rejects.toThrow('Invalid email or password');
+  });
 });

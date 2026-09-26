@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Sender, CsvParseResponse } from '../types';
 import { sendersApi, emailsApi } from '../services/api';
+import { parseEmailListClient } from '../utils/csvParser';
 import {
   X,
   UploadCloud,
@@ -68,23 +69,15 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onS
     }
   };
 
-  // Re-parse emails whenever recipients text changes
+  // Synchronously parse emails whenever recipients text changes
   useEffect(() => {
     if (!recipientsText.trim()) {
       setParsedRecipients(null);
       return;
     }
 
-    const timer = setTimeout(async () => {
-      try {
-        const result = await emailsApi.parseCsv(recipientsText);
-        setParsedRecipients(result);
-      } catch {
-        // fallback regex parse
-      }
-    }, 200);
-
-    return () => clearTimeout(timer);
+    const localResult = parseEmailListClient(recipientsText);
+    setParsedRecipients(localResult);
   }, [recipientsText]);
 
   // Handle CSV/text file drop or upload
@@ -139,8 +132,9 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onS
       return;
     }
 
-    if (!parsedRecipients || parsedRecipients.validEmails.length === 0) {
-      setErrorMessage('Please provide at least one valid recipient email address');
+    const currentParsed = parseEmailListClient(recipientsText);
+    if (!currentParsed || currentParsed.validEmails.length === 0) {
+      setErrorMessage('Please provide at least one valid recipient email address (e.g. name@domain.com)');
       return;
     }
 
@@ -154,7 +148,7 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onS
         senderId: selectedSenderId,
         subject,
         body,
-        recipients: parsedRecipients.validEmails,
+        recipients: currentParsed.validEmails,
         startTime: effectiveStartTime,
         delayMs,
         hourlyLimit,

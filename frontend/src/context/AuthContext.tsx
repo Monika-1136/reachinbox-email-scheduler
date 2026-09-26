@@ -7,6 +7,8 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   loginWithGoogle: () => void;
+  loginWithCredentials: (email: string, password: string) => Promise<void>;
+  signupWithCredentials: (name: string, email: string, password: string) => Promise<void>;
   loginWithDev: (email?: string, name?: string) => Promise<void>;
   loginWithDemo: (email?: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -60,7 +62,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.location.href = `${apiBase}/api/auth/google`;
   };
 
-  const loginWithDev = async (email = 'demo@reachinbox.ai', name = 'ReachInbox Demo User') => {
+  const loginWithCredentials = async (email: string, password: string) => {
+    setLoading(true);
+    try {
+      const data = await authApi.login({ email, password });
+      localStorage.setItem('reachinbox_token', data.token);
+      setToken(data.token);
+      setUser(data.user);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signupWithCredentials = async (name: string, email: string, password: string) => {
+    setLoading(true);
+    try {
+      const data = await authApi.signup({ name, email, password });
+      localStorage.setItem('reachinbox_token', data.token);
+      setToken(data.token);
+      setUser(data.user);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loginWithDev = async (email = 'demo@reachinbox.local', name = 'ReachInbox Demo User') => {
     setLoading(true);
     try {
       const data = await authApi.devLogin(email, name);
@@ -91,6 +117,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         token,
         loading,
         loginWithGoogle,
+        loginWithCredentials,
+        signupWithCredentials,
         loginWithDev,
         loginWithDemo: loginWithDev,
         logout,
