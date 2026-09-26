@@ -1,0 +1,80 @@
+import express, { Express } from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
+import { config } from './config/env';
+import { authRouter } from './routes/authRoutes';
+import { senderRouter } from './routes/senderRoutes';
+import { campaignRouter } from './routes/campaignRoutes';
+import { emailRouter } from './routes/emailRoutes';
+import { slackRouter } from './routes/slackRoutes';
+import { bullBoardRouter, getQueueStatsHandler } from './controllers/adminController';
+import { errorHandler } from './middleware/errorMiddleware';
+import { getEsStatus } from './config/elasticsearch';
+import { redisClient } from './config/redis';
+
+export function createApp(): Express {
+  const app = express();
+
+  // Security Middleware
+  app.use(
+    helmet({
+      contentSecurityPolicy: false, // allow Bull Board UI assets and icons
+    })
+  );
+
+  // CORS Configuration
+  app.use(
+    cors({
+      origin: [config.frontendUrl, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
+    })
+  );
+
+  // Parsers
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+  app.use(cookieParser());
+
+  // Health check endpoint
+  app.get('/api/health', async (_req, res) => {
+    let redisConnected = false;
+    try {
+      redisConnected = redisClient.status === 'ready' || (await redisClient.ping()) === 'PONG';
+    } catch {
+      redisConnected = false;
+    }
+
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      services: {
+        redis: redisConnected ? 'connected' : 'disconnected',
+        elasticsearch: getEsStatus() ? 'connected' : 'degraded (fallback to db)',
+      },
+      workerConfig: {
+        concurrency: config.worker.concurrency,
+        minDelayMs: config.worker.minDelayMs,
+        maxEmailsPerHour: config.worker.maxEmailsPerHour,
+      },
+    });
+  });
+
+  // Bull Board Queue Dashboard (Mounted at /admin/queues)
+  app.use('/admin/queues', bullBoardRouter);
+
+  // API Routes
+  app.use('/api/auth', authRouter);
+  app.use('/api/senders', senderRouter);
+  app.use('/api/campaigns', campaignRouter);
+  app.use('/api/emails', emailRouter);
+  app.use('/api/slack', slackRouter);
+  app.get('/api/queues/stats', getQueueStatsHandler);
+
+  // Centralized Error Handling
+  app.use(errorHandler);
+
+  return app;
+}
