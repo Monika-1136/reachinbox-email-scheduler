@@ -234,7 +234,7 @@ export const SignupPage: React.FC = () => {
           <p className="text-center text-xs text-gray-400 pt-2 border-t border-[#1F2433]">
             Already have an account?{' '}
             <Link to="/login" className="text-brand-400 font-semibold hover:underline">
-              Log in
+              Sign In
             </Link>
           </p>
         </div>

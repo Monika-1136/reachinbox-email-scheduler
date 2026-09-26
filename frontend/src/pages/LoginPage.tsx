@@ -150,7 +150,7 @@ export const LoginPage: React.FC = () => {
               ) : (
                 <>
                   <LogIn className="w-4 h-4" />
-                  <span>Login</span>
+                  <span>Sign In</span>
                 </>
               )}
             </button>
@@ -159,7 +159,7 @@ export const LoginPage: React.FC = () => {
           <div className="relative flex items-center justify-center my-4">
             <div className="border-t border-[#1F2433] w-full"></div>
             <span className="bg-[#12151F] px-3 text-[11px] font-medium text-gray-500 uppercase tracking-wider">
-              Or Instant Options
+              Or
             </span>
           </div>
 
@@ -197,7 +197,7 @@ export const LoginPage: React.FC = () => {
               type="button"
               onClick={handleDemoLogin}
               disabled={loading || isSubmitting || isDemoLoggingIn}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white text-sm font-semibold rounded-xl shadow-lg shadow-brand-600/25 transition-all active:scale-[0.99]"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#1F2433] hover:bg-[#2A3144] text-gray-200 text-xs font-semibold rounded-xl transition-all shadow-md active:scale-[0.99]"
             >
               {isDemoLoggingIn ? (
                 <>
@@ -206,9 +206,9 @@ export const LoginPage: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4" />
+                  <Sparkles className="w-3.5 h-3.5 text-brand-400" />
                   <span>1-Click Demo Login</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </>
               )}
             </button>
@@ -219,7 +219,7 @@ export const LoginPage: React.FC = () => {
             <p className="text-xs text-gray-400">
               Don't have an account?{' '}
               <Link to="/signup" className="text-brand-400 hover:text-brand-300 font-semibold hover:underline">
-                Create an account
+                Sign Up
               </Link>
             </p>
           </div>
@@ -236,11 +236,11 @@ export const LoginPage: React.FC = () => {
             </div>
             <div className="flex items-center gap-2">
               <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span>Atomic hourly rate-limiting with real-time alerts</span>
+              <span>Elasticsearch multi-field instant full-text search</span>
             </div>
             <div className="flex items-center gap-2">
               <Clock className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-              <span>Ethereal & Real SMTP with Elasticsearch instant search</span>
+              <span>Dual SMTP mode: Ethereal sandbox preview & Real delivery</span>
             </div>
           </div>
         </div>

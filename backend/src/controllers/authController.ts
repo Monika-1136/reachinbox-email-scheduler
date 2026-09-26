@@ -56,9 +56,26 @@ export class AuthController {
       res.status(401).json({ success: false, message: 'Not authenticated' });
       return;
     }
+
+    const dbUser = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        avatarUrl: true,
+        createdAt: true,
+      },
+    });
+
+    if (!dbUser) {
+      res.status(401).json({ success: false, message: 'User record not found in database' });
+      return;
+    }
+
     res.json({
       success: true,
-      data: req.user,
+      data: dbUser,
     });
   }
 
@@ -84,7 +101,7 @@ export class AuthController {
       client_id: config.google.clientId,
       access_type: 'offline',
       response_type: 'code',
-      prompt: 'consent',
+      prompt: 'select_account',
       scope: [
         'https://www.googleapis.com/auth/userinfo.profile',
         'https://www.googleapis.com/auth/userinfo.email',
