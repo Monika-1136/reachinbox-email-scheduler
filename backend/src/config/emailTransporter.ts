@@ -12,7 +12,13 @@ export async function getEmailTransporter(): Promise<{
     return { transporter, fromAddress: currentFrom };
   }
 
-  if (config.smtp.user && config.smtp.password) {
+  const hasCustomCredentials =
+    config.smtp.user &&
+    config.smtp.password &&
+    !config.smtp.user.includes('your_') &&
+    !config.smtp.password.includes('your_');
+
+  if (hasCustomCredentials) {
     transporter = nodemailer.createTransport({
       host: config.smtp.host,
       port: config.smtp.port,
@@ -21,6 +27,9 @@ export async function getEmailTransporter(): Promise<{
         user: config.smtp.user,
         pass: config.smtp.password,
       },
+      tls: {
+        rejectUnauthorized: false,
+      },
     });
     console.log(`[SMTP] Configured using provided Ethereal credentials (${config.smtp.user})`);
     return { transporter, fromAddress: currentFrom };
@@ -28,7 +37,7 @@ export async function getEmailTransporter(): Promise<{
 
   // If no credentials supplied in .env, dynamically provision a real Ethereal test account!
   try {
-    console.log('[SMTP] No SMTP credentials in .env. Creating real Ethereal test account dynamically...');
+    console.log('[SMTP] No valid SMTP credentials in .env. Creating real Ethereal test account dynamically...');
     const testAccount = await nodemailer.createTestAccount();
     transporter = nodemailer.createTransport({
       host: 'smtp.ethereal.email',
@@ -37,6 +46,9 @@ export async function getEmailTransporter(): Promise<{
       auth: {
         user: testAccount.user,
         pass: testAccount.pass,
+      },
+      tls: {
+        rejectUnauthorized: false,
       },
     });
     currentFrom = `ReachInbox Scheduler <${testAccount.user}>`;

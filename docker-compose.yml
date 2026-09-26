@@ -4,16 +4,14 @@ services:
     container_name: reachinbox-mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: reachinbox_root_password
+      MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: reachinbox
-      MYSQL_USER: reachinbox_user
-      MYSQL_PASSWORD: reachinbox_secret_password
     ports:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root --password=reachinbox_root_password >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root --password=root >/dev/null 2>&1 || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -71,7 +69,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 5000
-      DATABASE_URL: mysql://reachinbox_user:reachinbox_secret_password@mysql:3306/reachinbox
+      DATABASE_URL: mysql://root:root@mysql:3306/reachinbox
       REDIS_URL: redis://redis:6379
       ELASTICSEARCH_URL: http://elasticsearch:9200
       FRONTEND_URL: http://localhost:5173

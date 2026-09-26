@@ -18,7 +18,7 @@ export const config = {
   jwtSecret: process.env.JWT_SECRET || 'reachinbox_default_super_secret_jwt_key_2026',
   sessionSecret: process.env.SESSION_SECRET || 'reachinbox_default_session_secret_key_2026',
 
-  databaseUrl: process.env.DATABASE_URL || 'mysql://reachinbox_user:reachinbox_secret_password@localhost:3306/reachinbox',
+  databaseUrl: process.env.DATABASE_URL || 'mysql://root:root@localhost:3306/reachinbox',
 
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
 

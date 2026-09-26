@@ -96,8 +96,8 @@ export class EmailService {
         hourlyLimit,
       };
 
-      // Add to BullMQ delayed jobs
-      const bullJobId = await addEmailJob(jobData, delayUntilRun, idempotencyKey);
+      // Add to BullMQ delayed jobs (use clean UUID emailRecord.id for BullMQ compatibility)
+      const bullJobId = await addEmailJob(jobData, delayUntilRun, emailRecord.id);
 
       // Link bullJobId in DB
       await prisma.scheduledEmail.update({
