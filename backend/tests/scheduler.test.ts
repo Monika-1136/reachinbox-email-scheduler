@@ -90,7 +90,7 @@ describe('Email Scheduling & BullMQ Delayed Jobs Flow', () => {
 
   it('demonstrates restart persistence: Redis BullMQ delayed jobs are retained independently of server memory', () => {
     // BullMQ delayed jobs are stored directly in Redis sorted sets (e.g. `bull:email-queue:delayed` with timestamp scores)
-    // and PostgreSQL retains ScheduledEmail records.
+    // and MySQL retains ScheduledEmail records.
     // When Node process restarts:
     // 1. Worker reconnects to Redis via `new Worker('email-queue', ...)`
     // 2. Redis delayed jobs fire when their timestamp arrives without losing scheduled state or timing.

@@ -10,7 +10,7 @@ async function bootstrap() {
   console.log('🚀 Starting ReachInbox Production Email Scheduler API');
   console.log('----------------------------------------------------');
 
-  // 1. Connect to PostgreSQL via Prisma
+  // 1. Connect to MySQL via Prisma
   await connectDb();
 
   // 2. Initialize Elasticsearch index
@@ -38,7 +38,7 @@ async function bootstrap() {
         await emailWorker.close();
         console.log('[Worker] BullMQ Worker closed.');
         await prisma.$disconnect();
-        console.log('[Database] PostgreSQL disconnected.');
+        console.log('[Database] MySQL disconnected.');
         await redisClient.quit();
         console.log('[Redis] Redis connection closed.');
       } catch (err) {

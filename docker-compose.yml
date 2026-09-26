@@ -1,23 +1,22 @@
-version: '3.8'
-
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: reachinbox-postgres
+  mysql:
+    image: mysql:8.0
+    container_name: reachinbox-mysql
     restart: always
     environment:
-      POSTGRES_USER: reachinbox
-      POSTGRES_PASSWORD: reachinbox_secret_password
-      POSTGRES_DB: reachinbox_scheduler
+      MYSQL_ROOT_PASSWORD: reachinbox_root_password
+      MYSQL_DATABASE: reachinbox
+      MYSQL_USER: reachinbox_user
+      MYSQL_PASSWORD: reachinbox_secret_password
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U reachinbox -d reachinbox_scheduler"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root --password=reachinbox_root_password >/dev/null 2>&1 || exit 1"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   redis:
     image: redis:7-alpine
@@ -61,7 +60,7 @@ services:
     container_name: reachinbox-backend
     restart: always
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -72,7 +71,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 5000
-      DATABASE_URL: postgresql://reachinbox:reachinbox_secret_password@postgres:5432/reachinbox_scheduler?schema=public
+      DATABASE_URL: mysql://reachinbox_user:reachinbox_secret_password@mysql:3306/reachinbox
       REDIS_URL: redis://redis:6379
       ELASTICSEARCH_URL: http://elasticsearch:9200
       FRONTEND_URL: http://localhost:5173
@@ -99,7 +98,7 @@ services:
       - VITE_API_URL=http://localhost:5000
 
 volumes:
-  postgres_data:
+  mysql_data:
     driver: local
   redis_data:
     driver: local

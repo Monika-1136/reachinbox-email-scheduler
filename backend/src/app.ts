@@ -12,6 +12,7 @@ import { bullBoardRouter, getQueueStatsHandler } from './controllers/adminContro
 import { errorHandler } from './middleware/errorMiddleware';
 import { getEsStatus } from './config/elasticsearch';
 import { redisClient } from './config/redis';
+import { prisma } from './config/db';
 
 export function createApp(): Express {
   const app = express();
@@ -41,16 +42,26 @@ export function createApp(): Express {
   // Health check endpoint
   app.get('/api/health', async (_req, res) => {
     let redisConnected = false;
+    let mysqlConnected = false;
+
     try {
       redisConnected = redisClient.status === 'ready' || (await redisClient.ping()) === 'PONG';
     } catch {
       redisConnected = false;
     }
 
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      mysqlConnected = true;
+    } catch {
+      mysqlConnected = false;
+    }
+
     res.json({
       status: 'healthy',
       timestamp: new Date().toISOString(),
       services: {
+        mysql: mysqlConnected ? 'connected' : 'disconnected',
         redis: redisConnected ? 'connected' : 'disconnected',
         elasticsearch: getEsStatus() ? 'connected' : 'degraded (fallback to db)',
       },

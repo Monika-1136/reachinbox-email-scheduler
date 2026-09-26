@@ -4,7 +4,7 @@
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg)](https://nodejs.org/)
 [![BullMQ](https://img.shields.io/badge/BullMQ-5.7-orange.svg)](https://bullmq.io/)
 [![Redis](https://img.shields.io/badge/Redis-7.0-red.svg)](https://redis.io/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-blue.svg)](https://www.postgresql.org/)
+[![MySQL](https://img.shields.io/badge/MySQL-8.0-blue.svg)](https://www.mysql.com/)
 [![Elasticsearch](https://img.shields.io/badge/Elasticsearch-8.11-yellow.svg)](https://www.elastic.co/)
 [![React](https://img.shields.io/badge/React-18-cyan.svg)](https://reactjs.org/)
 [![Vite](https://img.shields.io/badge/Vite-5.2-purple.svg)](https://vitejs.dev/)
@@ -32,7 +32,7 @@ A production-grade, distributed Outbound Email Job Scheduler built for **ReachIn
              Prisma ORM   |               | BullMQ Queue  | Elasticsearch Client
                           v               v               v
                +--------------+   +---------------+   +-------------------+
-               |  PostgreSQL  |   |     Redis     |   |   Elasticsearch   |
+               |   MySQL 8+   |   |     Redis     |   |   Elasticsearch   |
                |  (Persistent |   | (Delayed Jobs |   |  (Full-Text Email |
                |   DB State)  |   |  & Rate Keys) |   |      Search)      |
                +--------------+   +-------+-------+   +-------------------+
@@ -73,8 +73,8 @@ A production-grade, distributed Outbound Email Job Scheduler built for **ReachIn
 | **Live Slack Rate-Limit Alert**| Posts message when hourly limit is reached; deduplicated per hour window | ✅ Complete |
 | **Ethereal SMTP Delivery** | Real SMTP delivery via Nodemailer; exposes live web preview URLs | ✅ Complete |
 | **Elasticsearch Indexing** | Documents indexed on schedule/send; multi-field search with graceful DB fallback | ✅ Complete |
-| **BullMQ Live Dashboard** | Mounted at `/admin/queues` via Bull Board for real-time queue inspection | ✅ Complete |
-| **Docker Compose** | One-command orchestration for PostgreSQL, Redis, Elasticsearch, API & Frontend | ✅ Complete |
+| **Bull Board Dashboard** | Mounted at `/admin/queues` via Bull Board for real-time queue inspection | ✅ Complete |
+| **Docker Compose** | One-command orchestration for MySQL 8+, Redis, Elasticsearch, API & Frontend | ✅ Complete |
 
 ---
 
@@ -95,7 +95,7 @@ reachinbox-email-scheduler/
 │   │   ├── app.ts              # Express App setup
 │   │   └── server.ts           # Server bootstrap & graceful shutdown
 │   ├── prisma/
-│   │   └── schema.prisma       # Relational models, enums, indexes
+│   │   └── schema.prisma       # MySQL Relational models, enums, indexes
 │   ├── tests/                  # Unit & integration tests with Vitest
 │   ├── package.json
 │   ├── tsconfig.json
@@ -118,7 +118,7 @@ reachinbox-email-scheduler/
 │   ├── nginx.conf
 │   └── .env.example
 │
-├── docker-compose.yml          # Postgres, Redis, Elasticsearch, Backend, Frontend
+├── docker-compose.yml          # MySQL 8+, Redis, Elasticsearch, Backend, Frontend
 ├── DEMO.md                     # 5-minute step-by-step reviewer demo script
 ├── README.md                   # Full documentation
 ├── .gitignore
@@ -131,7 +131,7 @@ reachinbox-email-scheduler/
 
 ### Prerequisites
 - Node.js 20+
-- Docker & Docker Compose (or local PostgreSQL, Redis, and Elasticsearch)
+- Docker & Docker Compose (or local MySQL 8+, Redis, and Elasticsearch)
 
 ### Step 1: Clone and Configure Environment
 
@@ -150,8 +150,8 @@ cp frontend/.env.example frontend/.env
 ### Step 2: Launch Supporting Services with Docker
 
 ```bash
-# Start PostgreSQL, Redis, and Elasticsearch containers
-docker compose up -d postgres redis elasticsearch
+# Start MySQL, Redis, and Elasticsearch containers
+docker compose up -d mysql redis elasticsearch
 ```
 
 ### Step 3: Initialize Database & Run Migrations
@@ -199,7 +199,7 @@ One of the most critical requirements is proving that future scheduled emails su
 3. **Terminate Backend:** Press `Ctrl + C` in the backend terminal.
 4. **Wait:** Wait past the original scheduled time (e.g. 10:06). Notice that Redis preserves the job timer in its sorted set.
 5. **Restart Backend:** Run `npm run dev:backend`.
-6. **Result:** BullMQ worker reconnects, detects that the delayed timer has passed, and immediately delivers the email exactly once! Status transitions to `SENT` in PostgreSQL and the Ethereal preview link is generated.
+6. **Result:** BullMQ worker reconnects, detects that the delayed timer has passed, and immediately delivers the email exactly once! Status transitions to `SENT` in MySQL and the Ethereal preview link is generated.
 
 ---
 
@@ -215,7 +215,7 @@ idempotencyKey = `${campaignId}:${recipientEmail.toLowerCase()}`
 2. **Database State Check:** Before initiating SMTP communication, the worker checks `ScheduledEmail.status`. If already `SENT`, it immediately acknowledges the job and returns.
 3. **Atomic Transition:** The worker executes an atomic update:
    ```sql
-   UPDATE "ScheduledEmail"
+   UPDATE ScheduledEmail
    SET status = 'PROCESSING', attempts = attempts + 1
    WHERE id = :id AND status != 'SENT';
    ```
@@ -238,7 +238,7 @@ Tracks sending volume in real time using atomic Redis counters:
   - Calculates milliseconds until the next hour window (`(hourWindow + 1) * 3600000 - Date.now() + jitter`).
   - **Does NOT fail the email!**
   - Re-enqueues the BullMQ job with the calculated delay.
-  - Updates `scheduledAt` in PostgreSQL so the dashboard displays the rescheduled time.
+  - Updates `scheduledAt` in MySQL so the dashboard displays the rescheduled time.
   - Dispatches a live Slack notification.
 
 ---
@@ -257,7 +257,7 @@ When a sender exhausts its hourly sending limit:
 - **Index:** `reachinbox-emails`
 - **Indexed Fields:** `recipientEmail`, `subject`, `body`, `status`, `senderEmail`, `scheduledAt`, `sentAt`, `campaignId`, `userId`.
 - **Search API:** `GET /api/emails/search?q=...&status=...`
-- **Graceful Fallback:** If Elasticsearch is temporarily starting or offline, the search service automatically falls back to PostgreSQL ILIKE queries without throwing 500 errors.
+- **Graceful Fallback:** If Elasticsearch is temporarily starting or offline, the search service automatically falls back to MySQL LIKE queries without throwing 500 errors.
 
 ---
 
@@ -273,8 +273,14 @@ BACKEND_URL=http://localhost:5000
 JWT_SECRET=reachinbox_super_secret_jwt_key_2026
 SESSION_SECRET=reachinbox_super_secret_session_key_2026
 
-# Database & Redis
-DATABASE_URL="postgresql://reachinbox:reachinbox_secret_password@localhost:5432/reachinbox_scheduler?schema=public"
+# Database (MySQL 8+ & Prisma)
+DATABASE_URL="mysql://reachinbox_user:reachinbox_secret_password@localhost:3306/reachinbox"
+MYSQL_ROOT_PASSWORD=reachinbox_root_secret
+MYSQL_DATABASE=reachinbox
+MYSQL_USER=reachinbox_user
+MYSQL_PASSWORD=reachinbox_secret_password
+
+# Redis & BullMQ
 REDIS_URL="redis://localhost:6379"
 
 # Google OAuth Credentials
@@ -324,14 +330,15 @@ Test coverage includes:
 - `auth.test.ts`: JWT signing/verification, protected route authorization
 - `elasticsearch.test.ts`: Search queries and database fallback resilience
 - `scheduler.test.ts`: Campaign scheduling, BullMQ delayed job enqueuing, restart persistence
+- `e2eIntegration.test.ts`: Full end-to-end integration flows across MySQL, Redis, BullMQ, Ethereal, and Slack
 
 ---
 
 ## 📜 API Documentation
 
 | Method | Endpoint | Description | Auth Required |
-| :--- | :--- | :--- | :---: |
-| `GET` | `/api/health` | Service health, Redis & Elastic status | No |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/health` | Service health, MySQL, Redis & Elastic status | No |
 | `GET` | `/api/auth/me` | Current authenticated user profile | Yes |
 | `GET` | `/api/auth/google` | Initiates real Google OAuth flow | No |
 | `GET` | `/api/auth/google/callback` | Google OAuth redirect callback | No |
@@ -359,7 +366,7 @@ Test coverage includes:
 ## ⚖️ Assumptions & Trade-offs
 
 1. **Ethereal Dynamic Account Generation:** If explicit Ethereal credentials are not supplied in `.env`, the server automatically creates a live test account using `nodemailer.createTestAccount()`. This allows instant testing without manual registration.
-2. **Elasticsearch Resilience:** To ensure high availability, Elasticsearch query errors gracefully fall back to indexed PostgreSQL queries.
+2. **Elasticsearch Resilience:** To ensure high availability, Elasticsearch query errors gracefully fall back to indexed MySQL queries.
 3. **Worker Concurrency:** Default concurrency is set to 5 workers (`WORKER_CONCURRENCY=5`), which can be scaled up or run as dedicated worker containers in production.
 
 ---

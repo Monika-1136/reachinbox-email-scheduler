@@ -1,25 +1,22 @@
 import { PrismaClient } from '@prisma/client';
 
-declare global {
-  // eslint-disable-next-line no-var
-  var prisma: PrismaClient | undefined;
-}
+const globalForPrisma = global as unknown as { prisma: PrismaClient | undefined };
 
-export const prisma =
-  global.prisma ||
+export const prisma: PrismaClient =
+  globalForPrisma.prisma ||
   new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
   });
 
 if (process.env.NODE_ENV !== 'production') {
-  global.prisma = prisma;
+  globalForPrisma.prisma = prisma;
 }
 
 export async function connectDb(): Promise<void> {
   try {
     await prisma.$connect();
-    console.log('[PostgreSQL] Connected successfully via Prisma');
+    console.log('[MySQL] Connected successfully via Prisma');
   } catch (error) {
-    console.warn('[PostgreSQL] Connection warning/error:', (error as Error).message);
+    console.warn('[MySQL] Connection warning/error:', (error as Error).message);
   }
 }

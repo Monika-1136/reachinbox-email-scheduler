@@ -63,7 +63,7 @@ export function createEmailWorker(): Worker<EmailJobData> {
           `Rescheduling job to next window (+${Math.round(retryDelayMs / 1000)}s at ${nextScheduledDate.toISOString()})`
         );
 
-        // Update scheduled time in PostgreSQL so dashboard displays correct rescheduled time
+        // Update scheduled time in MySQL so dashboard displays correct rescheduled time
         await prisma.scheduledEmail.update({
           where: { id: emailId },
           data: {
@@ -128,7 +128,7 @@ export function createEmailWorker(): Worker<EmailJobData> {
 
         const sentAt = new Date();
 
-        // 6. Update PostgreSQL state to SENT
+        // 6. Update MySQL state to SENT
         const updatedEmail = await prisma.scheduledEmail.update({
           where: { id: emailId },
           data: {
@@ -166,7 +166,7 @@ export function createEmailWorker(): Worker<EmailJobData> {
         const errorMessage = (sendError as Error).message;
         console.error(`[Worker] ❌ Failed to send email ${emailId} to ${recipientEmail}:`, errorMessage);
 
-        // Update PostgreSQL status
+        // Update MySQL status
         const isLastAttempt = job.attemptsMade + 1 >= (job.opts.attempts || 3);
         const finalStatus = isLastAttempt ? 'FAILED' : 'SCHEDULED';
 

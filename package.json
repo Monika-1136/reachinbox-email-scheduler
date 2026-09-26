@@ -1,7 +1,7 @@
 {
   "name": "reachinbox-email-scheduler",
   "version": "1.0.0",
-  "description": "Production-grade Full-stack Email Job Scheduler with BullMQ, Redis, PostgreSQL, Ethereal SMTP, Elasticsearch, Google & Slack OAuth",
+  "description": "Production-grade Full-stack Email Job Scheduler with BullMQ, Redis, MySQL, Ethereal SMTP, Elasticsearch, Google & Slack OAuth",
   "private": true,
   "workspaces": [
     "backend",
@@ -27,7 +27,7 @@
     "email-scheduler",
     "bullmq",
     "redis",
-    "postgresql",
+    "mysql",
     "prisma",
     "elasticsearch",
     "slack-oauth",

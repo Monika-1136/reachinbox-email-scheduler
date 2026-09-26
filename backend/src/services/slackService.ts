@@ -45,7 +45,7 @@ export class SlackService {
     const authedUserId = response.authed_user?.id;
     const incomingWebhookChannel = (response.incoming_webhook as { channel?: string; channel_id?: string })?.channel_id;
 
-    // Store in PostgreSQL
+    // Store in MySQL
     await prisma.slackConnection.upsert({
       where: { userId },
       create: {

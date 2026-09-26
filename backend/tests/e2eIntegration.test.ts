@@ -50,7 +50,7 @@ describe('END-TO-END ACCEPTANCE INTEGRATION SUITE (8 Core Scenarios)', () => {
   // =========================================================================
   // TEST 2: Schedule Email -> DB Records & BullMQ Delayed Jobs
   // =========================================================================
-  describe('TEST 2: Schedule Email -> PostgreSQL Records & BullMQ Delayed Jobs', () => {
+  describe('TEST 2: Schedule Email -> MySQL Records & BullMQ Delayed Jobs', () => {
     it('creates campaign in DB, creates scheduled email records, and enqueues delayed jobs', async () => {
       const mockSender = {
         id: testSenderId,
@@ -197,7 +197,7 @@ describe('END-TO-END ACCEPTANCE INTEGRATION SUITE (8 Core Scenarios)', () => {
   // TEST 4: Duplicate Processing & Idempotency Protection
   // =========================================================================
   describe('TEST 4: Idempotency Protection Prevents Duplicate Sending', () => {
-    it('aborts second execution if status is already SENT in PostgreSQL', async () => {
+    it('aborts second execution if status is already SENT in MySQL', async () => {
       const alreadySentRecord = {
         id: 'email-idempotent-1',
         status: 'SENT',
@@ -332,7 +332,7 @@ describe('END-TO-END ACCEPTANCE INTEGRATION SUITE (8 Core Scenarios)', () => {
       // BullMQ delayed jobs are persisted in Redis sorted sets (`bull:email-queue:delayed` with timestamp score)
       // When Node.js backend terminates:
       // - Redis holds the sorted set untouched.
-      // - PostgreSQL holds the ScheduledEmail state.
+      // - MySQL holds the ScheduledEmail state.
       // When backend restarts:
       // - `createEmailWorker()` initializes with the same Redis connection options.
       // - BullMQ reads due jobs from Redis when timestamp arrives.

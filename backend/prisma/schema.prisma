@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -15,11 +15,11 @@ enum EmailStatus {
 }
 
 model User {
-  id              String           @id @default(uuid())
-  googleId        String?          @unique
-  name            String
-  email           String           @unique
-  avatarUrl       String?
+  id              String           @id @default(uuid()) @db.VarChar(36)
+  googleId        String?          @unique @db.VarChar(255)
+  name            String           @db.VarChar(255)
+  email           String           @unique @db.VarChar(255)
+  avatarUrl       String?          @db.Text
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
@@ -32,10 +32,10 @@ model User {
 }
 
 model Sender {
-  id              String           @id @default(uuid())
-  userId          String
-  email           String
-  displayName     String
+  id              String           @id @default(uuid()) @db.VarChar(36)
+  userId          String           @db.VarChar(36)
+  email           String           @db.VarChar(255)
+  displayName     String           @db.VarChar(255)
   hourlyLimit     Int              @default(200)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -48,10 +48,10 @@ model Sender {
 }
 
 model EmailCampaign {
-  id              String           @id @default(uuid())
-  userId          String
-  subject         String
-  body            String
+  id              String           @id @default(uuid()) @db.VarChar(36)
+  userId          String           @db.VarChar(36)
+  subject         String           @db.VarChar(500)
+  body            String           @db.LongText
   startTime       DateTime
   delayMs         Int              @default(2000)
   hourlyLimit     Int              @default(200)
@@ -65,22 +65,22 @@ model EmailCampaign {
 }
 
 model ScheduledEmail {
-  id              String           @id @default(uuid())
-  campaignId      String
-  userId          String
-  senderId        String
-  recipientEmail  String
-  subject         String
-  body            String
+  id              String           @id @default(uuid()) @db.VarChar(36)
+  campaignId      String           @db.VarChar(36)
+  userId          String           @db.VarChar(36)
+  senderId        String           @db.VarChar(36)
+  recipientEmail  String           @db.VarChar(255)
+  subject         String           @db.VarChar(500)
+  body            String           @db.LongText
   scheduledAt     DateTime
   sentAt          DateTime?
   status          EmailStatus      @default(SCHEDULED)
   attempts        Int              @default(0)
-  bullJobId       String?
-  idempotencyKey  String           @unique
-  messageId       String?
-  etherealUrl     String?
-  errorMessage    String?
+  bullJobId       String?          @db.VarChar(255)
+  idempotencyKey  String           @unique @db.VarChar(255)
+  messageId       String?          @db.VarChar(255)
+  etherealUrl     String?          @db.Text
+  errorMessage    String?          @db.Text
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
@@ -97,14 +97,14 @@ model ScheduledEmail {
 }
 
 model SlackConnection {
-  id              String           @id @default(uuid())
-  userId          String           @unique
-  slackUserId     String?
-  teamId          String?
-  teamName        String?
-  channelId       String?
-  channelName     String?
-  accessToken     String
+  id              String           @id @default(uuid()) @db.VarChar(36)
+  userId          String           @unique @db.VarChar(36)
+  slackUserId     String?          @db.VarChar(255)
+  teamId          String?          @db.VarChar(255)
+  teamName        String?          @db.VarChar(255)
+  channelId       String?          @db.VarChar(255)
+  channelName     String?          @db.VarChar(255)
+  accessToken     String           @db.Text
   connectedAt     DateTime         @default(now())
   disconnectedAt  DateTime?
   createdAt       DateTime         @default(now())
