@@ -39,9 +39,6 @@ export class EmailService {
       ? new Date()
       : baseStartTime;
 
-    const delayMs = input.delayMs !== undefined ? Math.max(0, input.delayMs) : config.worker.minDelayMs;
-    const hourlyLimit = input.hourlyLimit || sender.hourlyLimit || config.worker.maxEmailsPerHour;
-
     // 3. Create Campaign in DB
     const campaign = await prisma.emailCampaign.create({
       data: {
@@ -49,22 +46,19 @@ export class EmailService {
         subject: input.subject,
         body: input.body,
         startTime: effectiveStartTime,
-        delayMs,
-        hourlyLimit,
+        delayMs: 0,
+        hourlyLimit: 999999,
       },
     });
 
     // 4. Create ScheduledEmail records & BullMQ jobs
     const createdEmails = [];
+    const delayUntilRun = Math.max(0, effectiveStartTime.getTime() - Date.now());
 
     for (let i = 0; i < validRecipients.length; i++) {
       const recipient = validRecipients[i];
       // Deterministic idempotency key: unique per campaign + recipient
       const idempotencyKey = `${campaign.id}:${recipient.toLowerCase()}`;
-
-      // Calculate scheduled time with incremental delay
-      const scheduledTimeMs = effectiveStartTime.getTime() + (i * delayMs);
-      const scheduledAt = new Date(scheduledTimeMs);
 
       // Create DB Record
       const emailRecord = await prisma.scheduledEmail.create({
@@ -75,14 +69,11 @@ export class EmailService {
           recipientEmail: recipient,
           subject: input.subject,
           body: input.body,
-          scheduledAt,
+          scheduledAt: effectiveStartTime,
           status: 'SCHEDULED',
           idempotencyKey,
         },
       });
-
-      // Compute initial BullMQ delay in ms
-      const delayUntilRun = Math.max(0, scheduledTimeMs - Date.now());
 
       const jobData: EmailJobData = {
         emailId: emailRecord.id,
@@ -93,10 +84,10 @@ export class EmailService {
         recipientEmail: recipient,
         subject: input.subject,
         body: input.body,
-        hourlyLimit,
+        hourlyLimit: 999999,
       };
 
-      // Add to BullMQ delayed jobs (use clean UUID emailRecord.id for BullMQ compatibility)
+      // Add to BullMQ delayed jobs
       const bullJobId = await addEmailJob(jobData, delayUntilRun, emailRecord.id);
 
       // Link bullJobId in DB
@@ -116,7 +107,7 @@ export class EmailService {
         subject: input.subject,
         body: input.body,
         status: 'SCHEDULED',
-        scheduledAt: scheduledAt.toISOString(),
+        scheduledAt: effectiveStartTime.toISOString(),
         createdAt: emailRecord.createdAt.toISOString(),
       }).catch(() => {});
 
@@ -127,7 +118,7 @@ export class EmailService {
       campaignId: campaign.id,
       totalScheduled: createdEmails.length,
       startTime: effectiveStartTime,
-      delayMs,
+      delayMs: 0,
     };
   }
 

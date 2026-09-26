@@ -62,12 +62,16 @@ export const sendersApi = {
     const res = await api.get('/api/senders');
     return res.data.data;
   },
-  createSender: async (data: { email: string; displayName: string; hourlyLimit: number }): Promise<Sender> => {
+  createSender: async (data: { email: string; displayName: string; hourlyLimit?: number }): Promise<Sender> => {
     const res = await api.post('/api/senders', data);
     return res.data.data;
   },
   deleteSender: async (id: string): Promise<void> => {
     await api.delete(`/api/senders/${id}`);
+  },
+  testSender: async (id: string): Promise<{ success: boolean; message: string }> => {
+    const res = await api.post(`/api/senders/${id}/test`);
+    return res.data;
   },
 };
 
@@ -91,9 +95,7 @@ export const emailsApi = {
     body: string;
     recipients: string[];
     startTime?: string;
-    delayMs?: number;
-    hourlyLimit?: number;
-  }): Promise<{ campaignId: string; totalScheduled: number; startTime: string; delayMs: number }> => {
+  }): Promise<{ campaignId: string; totalScheduled: number; startTime: string }> => {
     const res = await api.post('/api/emails/schedule', data);
     return res.data.data;
   },

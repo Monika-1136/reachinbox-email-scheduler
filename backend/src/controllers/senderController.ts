@@ -81,4 +81,33 @@ export class SenderController {
       message: 'Sender deleted successfully',
     });
   }
+
+  public static async testSender(req: Request, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const { id } = req.params;
+
+    const sender = await prisma.sender.findFirst({
+      where: { id, userId },
+    });
+
+    if (!sender) {
+      res.status(404).json({ success: false, message: 'Sender not found' });
+      return;
+    }
+
+    const { verifySmtpConnection } = await import('../config/emailTransporter');
+    const result = await verifySmtpConnection();
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: result.message,
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: result.message,
+      });
+    }
+  }
 }

@@ -70,22 +70,17 @@ describe('Email Scheduling & BullMQ Delayed Jobs Flow', () => {
       body: 'Test email body content',
       recipients: ['lead1@example.com', 'lead2@example.com'],
       startTime: mockCampaign.startTime,
-      delayMs: 2000,
-      hourlyLimit: 200,
     });
 
     expect(result.campaignId).toBe(mockCampaign.id);
     expect(result.totalScheduled).toBe(2);
     expect(addEmailJobSpy).toHaveBeenCalledTimes(2);
 
-    // First job delay ~60s
+    // Both jobs scheduled for the campaign start time
     const firstCallDelay = addEmailJobSpy.mock.calls[0][1];
-    expect(firstCallDelay).toBeGreaterThan(50000);
-
-    // Second job delay ~62s (first delay + 2000ms delayMs - few ms elapsed)
     const secondCallDelay = addEmailJobSpy.mock.calls[1][1];
-    expect(secondCallDelay - firstCallDelay).toBeGreaterThan(1500);
-    expect(secondCallDelay - firstCallDelay).toBeLessThanOrEqual(2050);
+    expect(firstCallDelay).toBeGreaterThan(50000);
+    expect(secondCallDelay).toBe(firstCallDelay);
   });
 
   it('demonstrates restart persistence: Redis BullMQ delayed jobs are retained independently of server memory', () => {

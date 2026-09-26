@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Sender, CsvParseResponse } from '../types';
 import { sendersApi, emailsApi } from '../services/api';
 import { parseEmailListClient } from '../utils/csvParser';
@@ -6,7 +6,6 @@ import {
   X,
   UploadCloud,
   Clock,
-  Gauge,
   Sparkles,
   AlertCircle,
   CheckCircle2,
@@ -30,29 +29,44 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onS
 
   const [scheduleMode, setScheduleMode] = useState<'now' | 'later'>('now');
   const [customStartTime, setCustomStartTime] = useState<string>('');
-  const [delayMs, setDelayMs] = useState<number>(2000);
-  const [hourlyLimit, setHourlyLimit] = useState<number>(200);
 
   const [showAddSender, setShowAddSender] = useState(false);
   const [newSenderEmail, setNewSenderEmail] = useState('');
   const [newSenderName, setNewSenderName] = useState('');
-  const [newSenderLimit, setNewSenderLimit] = useState(200);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const resetForm = () => {
+    setSubject('');
+    setBody('');
+    setRecipientsText('');
+    setParsedRecipients(null);
+    setScheduleMode('now');
+    setCustomStartTime('');
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setShowAddSender(false);
+    setNewSenderEmail('');
+    setNewSenderName('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
+      resetForm();
       loadSenders();
-      // Set default start time to 5 minutes in future for convenience if 'later' selected
+      // Default future time if scheduled
       const future = new Date(Date.now() + 5 * 60 * 1000);
       const isoLocal = new Date(future.getTime() - future.getTimezoneOffset() * 60000)
         .toISOString()
         .slice(0, 16);
       setCustomStartTime(isoLocal);
-      setErrorMessage(null);
-      setSuccessMessage(null);
     }
   }, [isOpen]);
 
@@ -60,9 +74,8 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onS
     try {
       const data = await sendersApi.getSenders();
       setSenders(data);
-      if (data.length > 0 && !selectedSenderId) {
+      if (data.length > 0) {
         setSelectedSenderId(data[0].id);
-        setHourlyLimit(data[0].hourlyLimit || 200);
       }
     } catch {
       // ignore
@@ -99,17 +112,21 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onS
       const created = await sendersApi.createSender({
         email: newSenderEmail,
         displayName: newSenderName,
-        hourlyLimit: newSenderLimit,
+        hourlyLimit: 200,
       });
       setSenders((prev) => [...prev, created]);
       setSelectedSenderId(created.id);
-      setHourlyLimit(created.hourlyLimit);
       setShowAddSender(false);
       setNewSenderEmail('');
       setNewSenderName('');
     } catch (err: any) {
       setErrorMessage(err.response?.data?.message || 'Failed to add sender');
     }
+  };
+
+  const handleClose = () => {
+    resetForm();
+    onClose();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -150,15 +167,14 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onS
         body,
         recipients: currentParsed.validEmails,
         startTime: effectiveStartTime,
-        delayMs,
-        hourlyLimit,
       });
 
-      setSuccessMessage(`Successfully scheduled ${res.totalScheduled} emails with BullMQ!`);
+      setSuccessMessage(`Successfully scheduled ${res.totalScheduled} email(s) with BullMQ!`);
       setTimeout(() => {
+        resetForm();
         onSuccess();
         onClose();
-      }, 1200);
+      }, 1000);
     } catch (err: any) {
       setErrorMessage(err.response?.data?.message || 'Failed to schedule campaign');
     } finally {
@@ -166,15 +182,15 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onS
     }
   };
 
-  // Sample CSV filler for reviewer testing ease
+  // Sample CSV filler for testing ease
   const fillSampleCsv = () => {
     setRecipientsText(
-      `email\nalice@techgrowth.io\nbob@cloudinnovate.com\ncharlie@reachoutbox.ai\ndana@saasvelocity.net\nevan@outboundpro.org`
+      `vvce23cse0208@vvc.ac.in\nmonika300404@gmail.com`
     );
-    if (!subject) setSubject('Scaling your outbound pipeline with ReachInbox AI');
+    if (!subject) setSubject('ReachInbox Real Delivery Test');
     if (!body)
       setBody(
-        'Hi {{name}},\n\nI noticed your team is ramping up outbound SDR volume. ReachInbox provides distributed queue-based scheduling with atomic rate-limiting, persistence across restarts, and real-time Slack alerts.\n\nWould you be open to a 10-minute demo this Thursday?\n\nBest,\nAlex'
+        'This is an end-to-end ReachInbox outbound test.\n\nTesting real SMTP email dispatch and exact recipient delivery.'
       );
   };
 
@@ -191,11 +207,11 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onS
             </div>
             <div>
               <h2 className="text-base font-bold text-white tracking-tight">Schedule New Email Campaign</h2>
-              <p className="text-xs text-gray-400">BullMQ delayed queue with Redis atomic rate limiting</p>
+              <p className="text-xs text-gray-400">Direct BullMQ outbound email scheduler</p>
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1.5 text-gray-400 hover:text-white hover:bg-[#1F2433] rounded-xl transition-colors"
           >
             <X className="w-5 h-5" />
@@ -238,7 +254,7 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onS
                 <div className="grid grid-cols-2 gap-2">
                   <input
                     type="text"
-                    placeholder="Display Name (e.g. Alex Recruiter)"
+                    placeholder="Display Name (e.g. Monika)"
                     value={newSenderName}
                     onChange={(e) => setNewSenderName(e.target.value)}
                     className="bg-[#12151F] border border-[#1F2433] text-xs text-white px-3 py-2 rounded-lg outline-none focus:border-brand-500"
@@ -246,23 +262,14 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onS
                   />
                   <input
                     type="email"
-                    placeholder="Sender Email (e.g. alex@reachinbox.test)"
+                    placeholder="Sender Email (e.g. vvce23cse0208@vvc.ac.in)"
                     value={newSenderEmail}
                     onChange={(e) => setNewSenderEmail(e.target.value)}
                     className="bg-[#12151F] border border-[#1F2433] text-xs text-white px-3 py-2 rounded-lg outline-none focus:border-brand-500"
                     required
                   />
                 </div>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-xs text-gray-400">
-                    <span>Hourly limit:</span>
-                    <input
-                      type="number"
-                      value={newSenderLimit}
-                      onChange={(e) => setNewSenderLimit(parseInt(e.target.value) || 200)}
-                      className="w-20 bg-[#12151F] border border-[#1F2433] text-xs text-white px-2 py-1 rounded outline-none"
-                    />
-                  </div>
+                <div className="flex justify-end">
                   <button
                     type="button"
                     onClick={handleCreateSender}
@@ -275,16 +282,12 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onS
             ) : (
               <select
                 value={selectedSenderId}
-                onChange={(e) => {
-                  setSelectedSenderId(e.target.value);
-                  const found = senders.find((s) => s.id === e.target.value);
-                  if (found) setHourlyLimit(found.hourlyLimit || 200);
-                }}
+                onChange={(e) => setSelectedSenderId(e.target.value)}
                 className="w-full bg-[#0E1017] border border-[#1F2433] text-sm text-gray-200 px-3.5 py-2.5 rounded-xl outline-none focus:border-brand-500"
               >
                 {senders.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.displayName} ({s.email}) — Limit: {s.hourlyLimit}/hr
+                    {s.displayName} ({s.email})
                   </option>
                 ))}
               </select>
@@ -322,20 +325,21 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onS
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5 text-brand-400" />
-                Recipient Leads (CSV or Paste List)
+                Recipient Leads (CSV, TXT, or Paste)
               </label>
               <button
                 type="button"
                 onClick={fillSampleCsv}
                 className="text-[11px] text-brand-400 hover:text-brand-300 underline font-medium"
               >
-                Insert 5 Sample Leads
+                Insert Sample Leads
               </button>
             </div>
 
             <div className="space-y-2">
               <div className="relative border-2 border-dashed border-[#1F2433] hover:border-brand-500/50 rounded-2xl p-4 text-center transition-colors bg-[#0E1017]">
                 <input
+                  ref={fileInputRef}
                   type="file"
                   accept=".csv,.txt"
                   onChange={handleFileUpload}
@@ -396,85 +400,47 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onS
             )}
           </div>
 
-          {/* Timing, Rate Limits, and Delay Controls */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-[#0E1017] border border-[#1F2433] rounded-2xl">
-            {/* Start Time Mode */}
-            <div>
-              <label className="text-xs font-semibold text-gray-300 mb-1.5 flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-brand-400" /> Start Timing
-              </label>
-              <div className="grid grid-cols-2 gap-1 p-1 bg-[#12151F] rounded-xl border border-[#1F2433]">
-                <button
-                  type="button"
-                  onClick={() => setScheduleMode('now')}
-                  className={`py-1 text-xs font-semibold rounded-lg transition-all ${
-                    scheduleMode === 'now' ? 'bg-brand-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  Send Now
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setScheduleMode('later')}
-                  className={`py-1 text-xs font-semibold rounded-lg transition-all ${
-                    scheduleMode === 'later' ? 'bg-brand-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  Schedule
-                </button>
-              </div>
-              {scheduleMode === 'later' && (
-                <input
-                  type="datetime-local"
-                  value={customStartTime}
-                  onChange={(e) => setCustomStartTime(e.target.value)}
-                  className="w-full mt-2 bg-[#12151F] border border-[#1F2433] text-xs text-white px-2.5 py-1.5 rounded-lg outline-none focus:border-brand-500"
-                  required
-                />
-              )}
+          {/* Timing Controls (Cleaned without delay or rate limits) */}
+          <div className="p-4 bg-[#0E1017] border border-[#1F2433] rounded-2xl">
+            <label className="text-xs font-semibold text-gray-300 mb-2 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-brand-400" /> Start Timing
+            </label>
+            <div className="grid grid-cols-2 gap-2 p-1 bg-[#12151F] rounded-xl border border-[#1F2433]">
+              <button
+                type="button"
+                onClick={() => setScheduleMode('now')}
+                className={`py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                  scheduleMode === 'now' ? 'bg-brand-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                Send Immediately
+              </button>
+              <button
+                type="button"
+                onClick={() => setScheduleMode('later')}
+                className={`py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                  scheduleMode === 'later' ? 'bg-brand-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                Schedule for Future
+              </button>
             </div>
-
-            {/* Delay Between Emails (ms) */}
-            <div>
-              <label className="text-xs font-semibold text-gray-300 mb-1.5 flex items-center justify-between">
-                <span>Delay Between Sends</span>
-                <span className="text-brand-400 font-mono font-bold">{delayMs}ms</span>
-              </label>
+            {scheduleMode === 'later' && (
               <input
-                type="number"
-                min="500"
-                step="500"
-                value={delayMs}
-                onChange={(e) => setDelayMs(Math.max(0, parseInt(e.target.value) || 0))}
-                className="w-full bg-[#12151F] border border-[#1F2433] text-xs text-white px-3 py-2 rounded-xl outline-none focus:border-brand-500 font-mono"
+                type="datetime-local"
+                value={customStartTime}
+                onChange={(e) => setCustomStartTime(e.target.value)}
+                className="w-full mt-3 bg-[#12151F] border border-[#1F2433] text-xs text-white px-3 py-2 rounded-xl outline-none focus:border-brand-500"
+                required
               />
-              <p className="text-[10px] text-gray-500 mt-1">Spaced delivery prevents burst throttling</p>
-            </div>
-
-            {/* Hourly Sending Limit */}
-            <div>
-              <label className="text-xs font-semibold text-gray-300 mb-1.5 flex items-center justify-between">
-                <span className="flex items-center gap-1">
-                  <Gauge className="w-3.5 h-3.5 text-amber-400" /> Hourly Limit
-                </span>
-                <span className="text-amber-400 font-mono font-bold">{hourlyLimit}/hr</span>
-              </label>
-              <input
-                type="number"
-                min="1"
-                value={hourlyLimit}
-                onChange={(e) => setHourlyLimit(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-full bg-[#12151F] border border-[#1F2433] text-xs text-white px-3 py-2 rounded-xl outline-none focus:border-brand-500 font-mono"
-              />
-              <p className="text-[10px] text-gray-500 mt-1">Exceeding jobs auto-reschedule to next hour</p>
-            </div>
+            )}
           </div>
 
           {/* Submit Button */}
           <div className="pt-2 flex items-center justify-end gap-3">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="px-4 py-2 text-xs font-semibold text-gray-400 hover:text-white rounded-xl transition-colors"
             >
               Cancel

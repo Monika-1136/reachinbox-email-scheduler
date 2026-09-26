@@ -10,3 +10,4 @@ senderRouter.use(requireAuth);
 senderRouter.get('/', SenderController.getSenders);
 senderRouter.post('/', validateBody(createSenderSchema), SenderController.createSender);
 senderRouter.delete('/:id', SenderController.deleteSender);
+senderRouter.post('/:id/test', SenderController.testSender);

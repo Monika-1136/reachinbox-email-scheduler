@@ -143,12 +143,10 @@ export const DashboardPage: React.FC = () => {
 
       await emailsApi.schedule({
         senderId: senders[0].id,
-        subject: 'ReachInbox AI Outbound Optimization',
-        body: 'Hello,\n\nI wanted to share how ReachInbox handles distributed BullMQ delayed email queuing with persistence and atomic rate limits.\n\nBest,\nReach Team',
+        subject: 'ReachInbox Outbound Dispatch',
+        body: 'Hello,\n\nTesting direct BullMQ queue dispatch with exact recipient delivery.\n\nBest,\nReachInbox Team',
         recipients: demoRecipients,
         startTime: new Date().toISOString(),
-        delayMs: 2000,
-        hourlyLimit: 5, // Triggers rate limit rescheduling & Slack notification demonstration!
       });
 
       refreshAll();

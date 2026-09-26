@@ -89,19 +89,17 @@ describe('END-TO-END ACCEPTANCE INTEGRATION SUITE (8 Core Scenarios)', () => {
         body: mockCampaign.body,
         recipients: ['lead1@target.com', 'lead2@target.com'],
         startTime: mockCampaign.startTime,
-        delayMs: 2000,
-        hourlyLimit: 200,
       });
 
       expect(result.campaignId).toBe('camp-e2e-001');
       expect(result.totalScheduled).toBe(2);
       expect(addEmailJobSpy).toHaveBeenCalledTimes(2);
 
-      // Verify delay calculation: second job scheduled 2000ms after first
+      // Verify timing: both jobs scheduled for campaign startTime
       const firstDelay = addEmailJobSpy.mock.calls[0][1];
       const secondDelay = addEmailJobSpy.mock.calls[1][1];
-      expect(secondDelay - firstDelay).toBeGreaterThanOrEqual(1500);
-      expect(secondDelay - firstDelay).toBeLessThanOrEqual(2100);
+      expect(firstDelay).toBeGreaterThan(0);
+      expect(secondDelay).toBe(firstDelay);
     });
   });
 
