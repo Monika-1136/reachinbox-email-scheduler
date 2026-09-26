@@ -15,10 +15,17 @@ export class AuthController {
   }
 
   public static async googleAuth(req: Request, res: Response): Promise<void> {
-    if (!config.google.clientId || !config.google.clientSecret) {
-      // In development when Google Cloud credentials are not configured yet,
-      // redirect with helpful info or provide dev user
-      const redirectUrl = `${config.frontendUrl}/login?error=Google%20OAuth%20credentials%20not%20configured%20in%20backend%20.env`;
+    const hasValidGoogleCreds = Boolean(
+      config.google.clientId &&
+      config.google.clientSecret &&
+      !config.google.clientId.includes('your_google_client_id') &&
+      !config.google.clientId.includes('placeholder') &&
+      !config.google.clientSecret.includes('your_google_client_secret') &&
+      !config.google.clientSecret.includes('placeholder')
+    );
+
+    if (!hasValidGoogleCreds) {
+      const redirectUrl = `${config.frontendUrl}/login?error=Google%20OAuth%20credentials%20are%20not%20configured%20in%20backend/.env.%20Please%20set%20GOOGLE_CLIENT_ID%20and%20GOOGLE_CLIENT_SECRET%20or%20click%201-Click%20Demo%20Login.`;
       res.redirect(redirectUrl);
       return;
     }

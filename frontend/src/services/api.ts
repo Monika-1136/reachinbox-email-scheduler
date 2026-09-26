@@ -36,7 +36,11 @@ export const authApi = {
     return res.data.data;
   },
   devLogin: async (email?: string, name?: string): Promise<{ user: User; token: string }> => {
-    const res = await api.post('/api/auth/dev-login', { email, name });
+    const res = await api.post('/api/auth/demo', { email, name });
+    return res.data.data;
+  },
+  demoLogin: async (email?: string, name?: string): Promise<{ user: User; token: string }> => {
+    const res = await api.post('/api/auth/demo', { email, name });
     return res.data.data;
   },
   logout: async (): Promise<void> => {
