@@ -3,6 +3,7 @@ import { config } from './config/env';
 import { connectDb, prisma } from './config/db';
 import { initElasticsearch } from './config/elasticsearch';
 import { createEmailWorker } from './workers/emailWorker';
+import { initEmailTransporter } from './config/emailTransporter';
 import { redisClient } from './config/redis';
 
 async function bootstrap() {
@@ -16,10 +17,19 @@ async function bootstrap() {
   // 2. Initialize Elasticsearch index
   await initElasticsearch();
 
-  // 3. Start BullMQ Email Worker embedded in server
+  // 3. Initialize & Verify SMTP Transporter (Ethereal / Real)
+  let smtpInfo: { provider: string; user?: string; host: string; port: number; verified: boolean } | null = null;
+  try {
+    const { info } = await initEmailTransporter();
+    smtpInfo = info;
+  } catch (smtpErr) {
+    console.warn('[Bootstrap] SMTP transporter init warning:', (smtpErr as Error).message);
+  }
+
+  // 4. Start BullMQ Email Worker embedded in server
   const emailWorker = createEmailWorker();
 
-  // 4. Create and start Express server
+  // 5. Create and start Express server
   const app = createApp();
 
   const isGoogleConfigured = Boolean(
@@ -53,16 +63,16 @@ async function bootstrap() {
       console.log('Google OAuth:   MISSING (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET not set in .env)');
     }
     if (config.smtp.provider === 'real') {
-      if (isSmtpCustom) {
-        console.log(`SMTP Provider:  REAL / CONFIGURED (${config.smtp.host}:${config.smtp.port})`);
+      if (isSmtpCustom && smtpInfo?.verified) {
+        console.log(`SMTP Provider:  REAL / CONNECTED (${config.smtp.host}:${config.smtp.port})`);
       } else {
         console.log(`SMTP Provider:  REAL (MISSING CREDENTIALS: set SMTP_USER / SMTP_PASSWORD in .env)`);
       }
     } else {
-      if (isSmtpCustom) {
-        console.log(`SMTP Provider:  ETHEREAL / CONFIGURED (${config.smtp.user})`);
+      if (smtpInfo?.user) {
+        console.log(`SMTP Provider:  ETHEREAL / CONNECTED (${smtpInfo.user})`);
       } else {
-        console.log('SMTP Provider:  ETHEREAL (Sandbox / Testing Mode - Dynamic preview accounts)');
+        console.log('SMTP Provider:  ETHEREAL (Sandbox Mode)');
       }
     }
     if (isSlackConfigured) {
