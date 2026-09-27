@@ -117,7 +117,13 @@ async function bootstrap() {
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 }
 
-bootstrap().catch((err) => {
-  console.error('[Server] Fatal bootstrap error:', err);
-  process.exit(1);
-});
+export const app = createApp();
+
+if (!process.env.VERCEL) {
+  bootstrap().catch((err) => {
+    console.error('[Server] Fatal bootstrap error:', err);
+    process.exit(1);
+  });
+}
+
+export default app;
