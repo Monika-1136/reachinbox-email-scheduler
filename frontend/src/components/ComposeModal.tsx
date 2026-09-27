@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Users,
   PlusCircle,
+  Calendar,
 } from 'lucide-react';
 
 interface ComposeModalProps {
@@ -41,6 +42,24 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onS
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const datetimeInputRef = useRef<HTMLInputElement>(null);
+
+  const formatDisplayDateTime = (isoLocalString: string) => {
+    if (!isoLocalString) return '';
+    try {
+      const d = new Date(isoLocalString);
+      if (isNaN(d.getTime())) return isoLocalString;
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      const day = pad(d.getDate());
+      const month = pad(d.getMonth() + 1);
+      const year = d.getFullYear();
+      const hours = pad(d.getHours());
+      const minutes = pad(d.getMinutes());
+      return `${day}-${month}-${year} ${hours}:${minutes}`;
+    } catch {
+      return isoLocalString;
+    }
+  };
 
   const resetForm = () => {
     setSubject('');
@@ -412,34 +431,89 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onS
               <label className="text-xs font-semibold text-gray-300 mb-2 flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-brand-400" /> Start Timing
               </label>
-              <div className="grid grid-cols-2 gap-2 p-1 bg-[#12151F] rounded-xl border border-[#1F2433]">
+              <div className="grid grid-cols-2 gap-2 p-1.5 bg-[#12151F] rounded-xl border border-[#1F2433]">
                 <button
                   type="button"
                   onClick={() => setScheduleMode('now')}
-                  className={`py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                    scheduleMode === 'now' ? 'bg-brand-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'
+                  className={`py-2 px-3 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                    scheduleMode === 'now'
+                      ? 'bg-brand-600 text-white shadow-md shadow-brand-600/25 ring-1 ring-brand-400/40 font-bold'
+                      : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1E2C]'
                   }`}
                 >
+                  <Sparkles className="w-3.5 h-3.5" />
                   Send Immediately
                 </button>
                 <button
                   type="button"
-                  onClick={() => setScheduleMode('later')}
-                  className={`py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                    scheduleMode === 'later' ? 'bg-brand-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'
+                  onClick={() => {
+                    setScheduleMode('later');
+                    if (!customStartTime) {
+                      const future = new Date(Date.now() + 5 * 60 * 1000);
+                      const isoLocal = new Date(future.getTime() - future.getTimezoneOffset() * 60000)
+                        .toISOString()
+                        .slice(0, 16);
+                      setCustomStartTime(isoLocal);
+                    }
+                  }}
+                  className={`py-2 px-3 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                    scheduleMode === 'later'
+                      ? 'bg-brand-600 text-white shadow-md shadow-brand-600/25 ring-1 ring-brand-400/40 font-bold'
+                      : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1E2C]'
                   }`}
                 >
+                  <Clock className="w-3.5 h-3.5" />
                   Schedule for Future
                 </button>
               </div>
+
               {scheduleMode === 'later' && (
-                <input
-                  type="datetime-local"
-                  value={customStartTime}
-                  onChange={(e) => setCustomStartTime(e.target.value)}
-                  className="w-full mt-3 bg-[#12151F] border border-[#1F2433] text-xs text-white px-3 py-2 rounded-xl outline-none focus:border-brand-500"
-                  required
-                />
+                <div className="mt-3.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-gray-200 flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-brand-400" />
+                      Schedule Date & Time
+                    </label>
+                    {customStartTime && (
+                      <span className="text-[11px] font-mono font-medium text-brand-300 bg-brand-500/15 border border-brand-500/30 px-2 py-0.5 rounded-md">
+                        📅 {formatDisplayDateTime(customStartTime)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div
+                    onClick={() => {
+                      const input = datetimeInputRef.current;
+                      if (input) {
+                        if ('showPicker' in input && typeof (input as any).showPicker === 'function') {
+                          try {
+                            (input as any).showPicker();
+                            return;
+                          } catch {
+                            // Fallback to focus
+                          }
+                        }
+                        input.focus();
+                      }
+                    }}
+                    className="group relative flex items-center bg-[#12151F] hover:bg-[#161A26] border-2 border-[#2A3146] hover:border-brand-500/80 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 text-white rounded-xl px-3.5 py-2.5 transition-all cursor-pointer shadow-inner"
+                  >
+                    <Calendar className="w-4 h-4 text-brand-400 group-hover:text-brand-300 transition-colors mr-2.5 shrink-0" />
+                    <input
+                      ref={datetimeInputRef}
+                      type="datetime-local"
+                      value={customStartTime}
+                      onChange={(e) => setCustomStartTime(e.target.value)}
+                      className="w-full bg-transparent text-xs sm:text-sm font-medium text-white outline-none cursor-pointer [color-scheme:dark]"
+                      required
+                    />
+                    <Clock className="w-4 h-4 text-gray-400 group-hover:text-gray-300 transition-colors ml-2 shrink-0 pointer-events-none" />
+                  </div>
+
+                  <p className="text-[11px] text-gray-400">
+                    Choose when the emails should be sent.
+                  </p>
+                </div>
               )}
             </div>
 
