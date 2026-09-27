@@ -1,6 +1,9 @@
+import nodemailer from 'nodemailer';
 import { prisma } from '../config/db';
 import { addEmailJob, removeQueueJob } from './queueService';
 import { ElasticService } from './elasticService';
+import { RateLimiterService } from './rateLimiterService';
+import { getEmailTransporter } from '../config/emailTransporter';
 import { parseEmailList } from '../utils/csvParser';
 import { ScheduleEmailsRequest, EmailJobData } from '../types';
 import { config } from '../config/env';
@@ -253,5 +256,169 @@ export class EmailService {
     });
 
     return true;
+  }
+
+  /**
+   * Process a single scheduled email by ID (used by both worker & serverless cron)
+   */
+  public static async processSingleScheduledEmail(emailId: string): Promise<{
+    success: boolean;
+    emailId: string;
+    status: string;
+    messageId?: string;
+    etherealUrl?: string | null;
+    error?: string;
+  }> {
+    const existingEmail = await prisma.scheduledEmail.findUnique({
+      where: { id: emailId },
+      include: { sender: true },
+    });
+
+    if (!existingEmail) {
+      return { success: false, emailId, status: 'NOT_FOUND', error: 'Email record not found' };
+    }
+
+    if (existingEmail.status === 'SENT') {
+      return { success: true, emailId, status: 'ALREADY_SENT', messageId: existingEmail.messageId || undefined };
+    }
+
+    const sender = existingEmail.sender;
+    const activeSenderEmail = sender?.email || 'outreach@reachinbox.test';
+    const activeDisplayName = sender?.displayName || null;
+    const hourlyLimit = sender?.hourlyLimit || config.worker.maxEmailsPerHour || 200;
+
+    // Rate Limit Check
+    const hourlySlot = await RateLimiterService.checkAndReserveHourlySlot(existingEmail.senderId, hourlyLimit);
+    if (!hourlySlot.allowed) {
+      const retryDelayMs = hourlySlot.retryDelayMs || RateLimiterService.getMillisecondsUntilNextHour();
+      const nextScheduledDate = new Date(Date.now() + retryDelayMs);
+
+      await prisma.scheduledEmail.update({
+        where: { id: emailId },
+        data: {
+          scheduledAt: nextScheduledDate,
+          status: 'SCHEDULED',
+        },
+      });
+
+      return {
+        success: false,
+        emailId,
+        status: 'RATE_LIMITED_RESCHEDULED',
+        error: `Hourly rate limit exceeded for ${activeSenderEmail}. Rescheduled to ${nextScheduledDate.toISOString()}`,
+      };
+    }
+
+    // Transition to PROCESSING
+    await prisma.scheduledEmail.update({
+      where: { id: emailId },
+      data: {
+        status: 'PROCESSING',
+        attempts: { increment: 1 },
+      },
+    });
+
+    try {
+      const { transporter, fromAddress } = await getEmailTransporter({
+        email: activeSenderEmail,
+        displayName: activeDisplayName,
+      });
+
+      const info = await transporter.sendMail({
+        from: fromAddress,
+        to: existingEmail.recipientEmail,
+        subject: existingEmail.subject,
+        text: existingEmail.body,
+        html: `<div style="font-family: sans-serif; line-height: 1.6; color: #111;">
+          <p>${existingEmail.body.replace(/\\n/g, '<br/>')}</p>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+          <p style="font-size: 11px; color: #888;">Sent via ReachInbox Outbound Email Scheduler</p>
+        </div>`,
+      });
+
+      const isRealMode = config.smtp.provider === 'real';
+      const previewUrl = isRealMode ? null : nodemailer.getTestMessageUrl(info) || null;
+      const messageId = info.messageId || `reachinbox-${Date.now()}`;
+      const sentAt = new Date();
+
+      await prisma.scheduledEmail.update({
+        where: { id: emailId },
+        data: {
+          status: 'SENT',
+          sentAt,
+          messageId,
+          etherealUrl: previewUrl,
+          errorMessage: null,
+        },
+      });
+
+      ElasticService.indexEmail({
+        id: emailId,
+        campaignId: existingEmail.campaignId,
+        userId: existingEmail.userId,
+        senderId: existingEmail.senderId,
+        senderEmail: activeSenderEmail,
+        recipientEmail: existingEmail.recipientEmail,
+        subject: existingEmail.subject,
+        body: existingEmail.body,
+        status: 'SENT',
+        scheduledAt: existingEmail.scheduledAt.toISOString(),
+        sentAt: sentAt.toISOString(),
+        messageId,
+        createdAt: existingEmail.createdAt.toISOString(),
+      }).catch(() => {});
+
+      return {
+        success: true,
+        emailId,
+        status: 'SENT',
+        messageId,
+        etherealUrl: previewUrl,
+      };
+    } catch (sendError) {
+      const errorMessage = (sendError as Error).message;
+      await prisma.scheduledEmail.update({
+        where: { id: emailId },
+        data: {
+          status: 'FAILED',
+          errorMessage,
+        },
+      });
+
+      return {
+        success: false,
+        emailId,
+        status: 'FAILED',
+        error: errorMessage,
+      };
+    }
+  }
+
+  /**
+   * Process all currently due emails from database (for Vercel Cron / Serverless worker)
+   */
+  public static async processDueScheduledEmails(limit = 20): Promise<{
+    processed: number;
+    results: any[];
+  }> {
+    const dueEmails = await prisma.scheduledEmail.findMany({
+      where: {
+        status: 'SCHEDULED',
+        scheduledAt: { lte: new Date() },
+      },
+      take: limit,
+      orderBy: { scheduledAt: 'asc' },
+    });
+
+    const results = [];
+    for (const email of dueEmails) {
+      const res = await this.processSingleScheduledEmail(email.id);
+      results.push(res);
+    }
+
+    return {
+      processed: results.length,
+      results,
+    };
   }
 }

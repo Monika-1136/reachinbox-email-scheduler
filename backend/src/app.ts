@@ -9,6 +9,7 @@ import { campaignRouter } from './routes/campaignRoutes';
 import { emailRouter } from './routes/emailRoutes';
 import { slackRouter } from './routes/slackRoutes';
 import { bullBoardRouter, getQueueStatsHandler } from './controllers/adminController';
+import { EmailService } from './services/emailService';
 import { errorHandler } from './middleware/errorMiddleware';
 import { getEsStatus } from './config/elasticsearch';
 import { redisClient } from './config/redis';
@@ -27,15 +28,26 @@ export function createApp(): Express {
   // CORS Configuration
   app.use(
     cors({
-      origin: [
-        config.frontendUrl,
-        'http://localhost:5173',
-        'http://localhost:5174',
-        'http://localhost:5175',
-        'http://127.0.0.1:5173',
-        'http://127.0.0.1:5174',
-        'http://127.0.0.1:5175',
-      ],
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        const allowedOrigins = [
+          config.frontendUrl,
+          'http://localhost:5173',
+          'http://localhost:5174',
+          'http://localhost:5175',
+          'http://127.0.0.1:5173',
+          'http://127.0.0.1:5174',
+          'http://127.0.0.1:5175',
+        ];
+        if (
+          allowedOrigins.includes(origin) ||
+          origin.endsWith('.vercel.app') ||
+          (process.env.VERCEL_URL && origin.includes(process.env.VERCEL_URL))
+        ) {
+          return callback(null, true);
+        }
+        return callback(null, true);
+      },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
       allowedHeaders: ['Content-Type', 'Authorization'],
@@ -91,6 +103,23 @@ export function createApp(): Express {
   app.use('/api/emails', emailRouter);
   app.use('/api/slack', slackRouter);
   app.get('/api/queues/stats', getQueueStatsHandler);
+
+  // Vercel Cron Endpoint for serverless email dispatch
+  app.get('/api/cron/process-due', async (_req, res) => {
+    try {
+      const result = await EmailService.processDueScheduledEmails(30);
+      res.json({
+        success: true,
+        timestamp: new Date().toISOString(),
+        ...result,
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: err.message || 'Failed to process due emails',
+      });
+    }
+  });
 
   // Centralized Error Handling
   app.use(errorHandler);
