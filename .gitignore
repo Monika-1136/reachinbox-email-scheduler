@@ -14,12 +14,12 @@ build/
 
 # Environment variables - NEVER COMMIT SECRETS
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
 backend/.env
 frontend/.env
+*.ethereal-account.json
+.ethereal-account.json
 
 # Logs
 logs/
