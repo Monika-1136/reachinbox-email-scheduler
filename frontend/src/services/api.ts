@@ -29,6 +29,15 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Extract human-readable error messages from backend responses
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const customMessage = error.response?.data?.message || error.response?.data?.error || error.message;
+    return Promise.reject(new Error(customMessage));
+  }
+);
+
 // Auth Endpoints
 export const authApi = {
   signup: async (data: { name: string; email: string; password: string }): Promise<{ user: User; token: string }> => {
