@@ -1,10 +1,15 @@
 # ReachInbox Email Scheduler
 
-A production-grade, full-stack asynchronous email scheduling platform built for high-throughput, reliable outbound campaign orchestration. The system processes and validates recipient lists, schedules delayed email jobs via persistent distributed queues, enforces granular rate limits, guarantees job survival across server restarts, dispatches emails through SMTP with live web previews, and indexes all communications into Elasticsearch for instant search.
+A production-grade, full-stack asynchronous email scheduling platform built for high-throughput, reliable outbound campaign orchestration. The system processes and validates recipient lists, schedules delayed email jobs via persistent distributed BullMQ queues backed by Redis sorted sets, enforces granular per-sender rate limits, guarantees job survival across server restarts, dispatches emails through SMTP with live web previews, and indexes all communications into Elasticsearch for instant search.
 
-The platform is designed to be **dual-deployable**:
-1. **Serverless on Vercel**: Hosted as a unified full-stack application (Vite SPA frontend + Express Serverless API + Vercel Cron for scheduled email dispatch).
-2. **Containerized / VPS**: Run via Docker Compose (or standalone Node.js processes) with BullMQ workers and persistent Redis queues.
+---
+
+## Strict Assignment Compliance: No Cron Architecture
+
+The scheduling architecture strictly fulfills the assignment mandate:
+- **BullMQ Delayed Jobs**: Distributed job queue orchestrating delayed email execution backed by Redis sorted sets.
+- **Worker-Based Processing**: Persistent background worker consuming jobs continuously.
+- **No Cron / No Polling**: Zero cron jobs, zero `node-cron`, zero OS cron, zero Agenda, and zero periodic database polling schedulers. BullMQ delayed jobs + Redis + dedicated worker remain the sole source of scheduled execution.
 
 ---
 
@@ -15,12 +20,11 @@ The platform is designed to be **dual-deployable**:
 - **CSV & TXT Recipient Upload**: Drag-and-drop or file upload parsing of large recipient files alongside direct multiline text entry.
 - **Recipient Parsing & Validation**: Real-time email syntax validation, malformed address detection, and actionable badge summaries before dispatch.
 - **Duplicate Removal**: Automatic deduplication of recipient lists per campaign to prevent unintended repeat deliveries.
-- **Immediate & Future Email Scheduling**: Send instantly or schedule dispatches for any future timestamp (`T_future`) without client-side timers.
-- **Configurable Delay Between Emails**: Staggered dispatch offsets between consecutive emails to simulate human pacing and avoid spam traps.
+- **Immediate & Future Email Scheduling**: Send instantly or schedule dispatches for any future timestamp (`T_future`) via BullMQ delayed jobs.
+- **Configurable Delay Between Emails**: Staggered dispatch offsets between consecutive emails (`delayMs`) to simulate human pacing and avoid spam traps.
 - **Configurable Hourly Sending Limits**: Customizable sending quotas per sender profile enforced atomically.
-- **Redis-Backed Rate Limiting**: High-performance atomic Redis Lua scripts tracking hourly windows (`email-rate:{senderId}:{hourWindow}`).
-- **BullMQ Delayed Jobs & Vercel Cron**: Distributed job queue orchestrating delayed email execution backed by Redis sorted sets, complemented by Vercel Cron (`/api/cron/process-due`) for serverless production dispatches.
-- **Configurable Worker Concurrency**: Scalable background worker processing multiple concurrent jobs controlled via environment configuration.
+- **Redis-Backed Rate Limiting**: High-performance atomic Redis Lua scripts tracking hourly windows (`email-rate:{senderId}:{hourWindow}`). Excess emails are automatically rescheduled to the next valid window.
+- **Configurable Worker Concurrency**: Scalable background worker processing multiple concurrent jobs controlled via environment configuration (`WORKER_CONCURRENCY`).
 - **Multiple Sender Support**: Manage multiple outbound sender identities with independent rate limits and delivery tracking.
 - **MySQL Persistence**: Relational data modeling via Prisma ORM for users, senders, campaigns, scheduled emails, and integration states.
 - **Ethereal SMTP Integration**: Real SMTP handshake execution generating instant web preview URLs (`https://ethereal.email/message/...`) with toggle support for production SMTP.
@@ -41,10 +45,9 @@ The platform is designed to be **dual-deployable**:
 |---|---|---|
 | **Frontend** | React 18 + TypeScript + Vite | Single Page Application with Tailwind CSS and responsive UI |
 | **Backend** | Node.js + Express + TypeScript | RESTful API server with Zod validation, Helmet, CORS, and modular routes |
-| **Serverless Deployment** | Vercel Serverless Functions + Vercel Cron | Serverless API routes and automated periodic queue dispatches |
-| **Database** | MySQL 8.0 + Prisma ORM | Relational persistence with migrations, indexes, and type-safe queries |
 | **Queue** | BullMQ v5 | Distributed message queue managing delayed email execution and retries |
 | **Cache & Queue Storage** | Redis 7.0 | In-memory data store for BullMQ job state and atomic rate-limit counters |
+| **Database** | MySQL 8.0 + Prisma ORM | Relational persistence with migrations, indexes, and type-safe queries |
 | **Search Engine** | Elasticsearch 8.11 | Distributed search and analytics engine for full-text email search |
 | **Email Transport** | Ethereal SMTP / Nodemailer | Pooled SMTP transporter generating web preview URLs for safe testing |
 | **Queue Monitoring** | Bull Board (`@bull-board/express`) | Real-time visual monitoring dashboard for BullMQ queue states |
@@ -55,88 +58,42 @@ The platform is designed to be **dual-deployable**:
 ## System Architecture
 
 ```
-React Frontend (SPA in frontend/dist)
+React Frontend (SPA in Vite)
       ↓ (HTTP / REST API / JWT Auth)
-Express API Server / Vercel Serverless (api/index.ts)
+Express API Server (port 5000)
       ↓ (Prisma ORM)
 MySQL Database (Users, Senders, Campaigns, ScheduledEmails)
-      ↓ (Job Enqueue & Cron Triggers)
-Redis 7.0 / BullMQ / Vercel Cron (/api/cron/process-due)
-      ↓ (Worker Consumer / Serverless Processor)
-Rate Limiting & Delay Enforcer
-      ↓ (SMTP Message)
-Ethereal SMTP Server (Live Preview URL) / Real SMTP
+      ↓ (BullMQ addEmailJob with delayMs offset)
+Redis 7.0 (Sorted Sets / Delayed Queue: email-scheduler-queue)
+      ↓ (Continuous Event-Driven Consumer)
+Dedicated Persistent BullMQ Worker (emailWorker.ts)
+      ↓ (Atomic Rate Limiting & Delays)
+Rate Limiter Service (Redis Lua Script)
+      ↓ (SMTP Transport)
+Ethereal SMTP Server (Live Preview URL) / Real SMTP Provider
       ↓ (Status Transition: SCHEDULED → PROCESSING → SENT)
 MySQL Update (sentAt, messageId, etherealUrl)
       ↓ (Document Indexing)
-Elasticsearch (Full-Text Search Index)
+Elasticsearch 8.11 (Full-Text Search Index)
 ```
 
 ---
 
-## Vercel Production Deployment
+## Deployment Architecture
 
-The project is pre-configured with `vercel.json` for seamless zero-configuration deployment to Vercel.
+A persistent BullMQ worker and Redis connection cannot run inside an ephemeral serverless function. Therefore, deployment responsibilities are cleanly separated:
 
-### How Vercel Deployment Works
+### Frontend
+- **Hosting**: Static web hosting such as **Vercel**, Netlify, or AWS S3/CloudFront.
+- **Vercel Config**: `vercel.json` is configured strictly for the React/Vite SPA (`outputDirectory: "frontend/dist"`, SPA rewrites to `/index.html`).
+- **Environment**: Set `VITE_API_URL` to point to your persistent backend API URL.
 
-1. **Frontend Output Directory**: The Vite build generates production static assets into `frontend/dist`. `vercel.json` sets `"outputDirectory": "frontend/dist"`.
-2. **Serverless API Routes**: The entry point `api/index.ts` exports the Express app instance. All requests to `/api/*` and `/admin/*` are automatically routed to the serverless function.
-3. **SPA Client Routing**: All non-API routes (e.g. `/dashboard`, `/login`, `/signup`) automatically fallback to `frontend/dist/index.html` to support React Router refresh.
-4. **Vercel Cron Scheduling**: `vercel.json` defines a cron job triggering `/api/cron/process-due` every minute to process any pending scheduled emails that reach their dispatch time.
-5. **Prisma Client Generation**: Root `package.json` includes a `"postinstall": "npm run prisma:generate --workspace=backend"` hook, ensuring the Prisma client is generated automatically during Vercel's build phase.
-
-### Deploying to Vercel via Vercel Dashboard / CLI
-
-1. Import your GitHub repository (`reachinbox-email-scheduler`) in [Vercel](https://vercel.com/new).
-2. Configure **Environment Variables** in the Vercel Project Settings (see below).
-3. Click **Deploy**.
-
----
-
-## Environment Variables
-
-### Frontend-Safe Variables (Client Bundle)
-
-| Variable | Description | Example / Default |
-|---|---|---|
-| `VITE_API_URL` | Base API URL for frontend (leave empty for same-domain Vercel deployment) | *(empty in Vercel, or `http://localhost:5000` in dev)* |
-
-### Backend-Only Secrets (Server Environment)
-
-| Variable | Type | Description | Required? |
-|---|---|---|:---:|
-| `DATABASE_URL` | Secret | MySQL connection string (e.g. PlanetScale, AWS RDS, Railway, or local MySQL) | **Yes** |
-| `JWT_SECRET` | Secret | Secret key for signing authentication JWT tokens | **Yes** |
-| `SESSION_SECRET` | Secret | Secret key for session management | **Yes** |
-| `NODE_ENV` | String | Environment mode (`production` on Vercel) | **Yes** |
-| `REDIS_URL` | Secret | Redis connection string (e.g. Upstash Redis or local Redis) | Optional |
-| `ELASTICSEARCH_URL` | Secret | Elasticsearch endpoint URL | Optional |
-| `WORKER_CONCURRENCY` | Number | Concurrency limit for email jobs (default: `5`) | Optional |
-| `MIN_EMAIL_DELAY_MS` | Number | Default delay between sends in ms (default: `2000`) | Optional |
-| `MAX_EMAILS_PER_HOUR`| Number | Hourly sending limit per sender (default: `200`) | Optional |
-| `SMTP_PROVIDER` | String | `ethereal` for testing sandbox or `real` for production SMTP | Optional |
-| `SMTP_HOST` | String | SMTP host (default: `smtp.ethereal.email`) | Optional |
-| `SMTP_PORT` | Number | SMTP port (default: `587`) | Optional |
-| `SMTP_USER` | Secret | Custom SMTP user (auto-generated if empty in Ethereal mode) | Optional |
-| `SMTP_PASSWORD` | Secret | Custom SMTP password | Optional |
-| `GOOGLE_CLIENT_ID` | String | Google OAuth 2.0 Client ID | Optional |
-| `GOOGLE_CLIENT_SECRET`| Secret | Google OAuth 2.0 Client Secret | Optional |
-| `GOOGLE_CALLBACK_URL`| String | Google OAuth redirect URI | Optional |
-| `SLACK_CLIENT_ID` | String | Slack OAuth Client ID | Optional |
-| `SLACK_CLIENT_SECRET` | Secret | Slack OAuth Client Secret | Optional |
-| `SLACK_REDIRECT_URI` | String | Slack OAuth redirect URI | Optional |
-
----
-
-## Google OAuth Setup
-
-1. Open the [Google Cloud Console](https://console.cloud.google.com/).
-2. Navigate to **APIs & Services > Credentials** and create an **OAuth 2.0 Client ID** (Web application).
-3. Add **Authorized redirect URIs**:
-   - For Local Development: `http://localhost:5000/api/auth/google/callback`
-   - For Vercel Production: `https://<your-vercel-domain>.vercel.app/api/auth/google/callback`
-4. Copy `Client ID` and `Client Secret` into your Vercel Environment Variables (`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`).
+### Backend & Worker
+- **Hosting**: Persistent Node.js container service (e.g. Docker Compose, Railway, Render, Fly.io, AWS ECS, or VPS).
+- **Process Entrypoints**:
+  - API Server: `npm start` (or `node dist/server.js`)
+  - Standalone Worker: `npm run worker` (or `node dist/workers/runWorker.js`)
+  - Unified (Server + Embedded Worker): `npm start` automatically initializes both the Express API and the BullMQ worker.
 
 ---
 
@@ -148,7 +105,7 @@ The project is pre-configured with `vercel.json` for seamless zero-configuration
 - **npm**: `v10.x` or higher
 - **Docker & Docker Compose**: For local MySQL, Redis, and Elasticsearch
 
-### Installation
+### Step-by-Step Installation
 
 ```bash
 # 1. Clone repository
@@ -162,7 +119,7 @@ npm install
 cp .env.example backend/.env
 cp frontend/.env.example frontend/.env
 
-# 4. Start local infrastructure via Docker
+# 4. Start local infrastructure via Docker (MySQL, Redis, Elasticsearch)
 docker compose up -d mysql redis elasticsearch
 
 # 5. Push Prisma schema to MySQL
@@ -175,6 +132,7 @@ cd ..
 npm run dev
 ```
 
+### Access URLs
 - **Frontend SPA**: [http://localhost:5173](http://localhost:5173)
 - **Backend API**: [http://localhost:5000](http://localhost:5000)
 - **Bull Board Dashboard**: [http://localhost:5000/admin/queues](http://localhost:5000/admin/queues)
@@ -182,73 +140,68 @@ npm run dev
 
 ---
 
-## Production Email Scheduler Architecture
+## Production Deployment Guide
 
-### 1. Vercel Serverless Mode
-- Immediate emails (`startTime <= now`) are dispatched asynchronously during scheduling.
-- Future scheduled emails (`startTime > now`) are stored with `status: SCHEDULED` in MySQL.
-- **Vercel Cron** (`vercel.json`) calls `/api/cron/process-due` every minute to claim and dispatch any emails whose `scheduledAt` timestamp has matured.
+### Option 1: Docker Compose (Full Stack on VPS / Server)
 
-### 2. Dedicated Worker Mode (Docker / VPS)
-- Uses **BullMQ** delayed jobs backed by **Redis sorted sets**.
-- The worker loop (`src/workers/emailWorker.ts`) listens to Redis events and executes jobs at exact millisecond offsets without cron polling.
-- Restart persistence ensures all delayed timers survive process reboots.
+The repository provides a complete [`docker-compose.yml`](docker-compose.yml) running MySQL, Redis, Elasticsearch, Backend API, and Frontend Nginx:
+
+```bash
+# Build and run entire containerized stack
+docker compose up -d --build
+
+# View container logs
+docker compose logs -f
+```
+
+### Option 2: Split Cloud Deployment (Vercel Frontend + Render/Railway Backend)
+
+1. **Frontend on Vercel**:
+   - Import repository on [Vercel](https://vercel.com/new).
+   - Root directory: `./` (or `frontend`).
+   - Build command: `npm run build:frontend`.
+   - Output directory: `frontend/dist`.
+   - Environment Variable: `VITE_API_URL=https://your-backend-api.com`.
+
+2. **Backend & Worker on Railway / Render / Fly.io / VPS**:
+   - Deploy backend using Dockerfile (`backend/Dockerfile`) or Node.js runtime.
+   - Build command: `npm run build:backend`.
+   - Start command: `npm start` (runs API + Worker).
+   - Configure managed MySQL, managed Redis, and SMTP environment variables.
 
 ---
 
-## Project Structure
+## Environment Variables Reference
 
-```
-reachinbox-email-scheduler/
-├── vercel.json                     # Vercel deployment configuration & Cron definition
-├── api/
-│   └── index.ts                    # Vercel Serverless Function entry point
-├── docker-compose.yml              # Local container stack (MySQL, Redis, Elasticsearch)
-├── package.json                    # Root npm workspace with postinstall & build scripts
-├── package-lock.json               # Committed root dependency lockfile
-├── .gitignore                      # Security exclusions (no .env or credentials)
-├── .env.example                    # Environment variable reference template
-├── README.md                       # Comprehensive documentation
-├── backend/
-│   ├── package.json                # Backend dependencies & Prisma scripts
-│   ├── tsconfig.json               # Backend TypeScript configuration
-│   ├── Dockerfile                  # Standalone backend container definition
-│   ├── prisma/
-│   │   └── schema.prisma           # MySQL relational schema (User, Sender, Campaign, Email, Slack)
-│   ├── src/
-│   │   ├── server.ts               # Standalone Express & Worker entry point
-│   │   ├── app.ts                  # Express application, CORS, and route mounting
-│   │   ├── config/
-│   │   │   ├── db.ts               # Prisma client singleton
-│   │   │   ├── redis.ts            # IORedis configuration
-│   │   │   ├── elasticsearch.ts    # Elasticsearch client & graceful fallback
-│   │   │   ├── emailTransporter.ts # Nodemailer SMTP pool & Ethereal setup
-│   │   │   └── env.ts              # Dynamic environment & Vercel domain resolution
-│   │   ├── controllers/            # Route controllers (auth, emails, senders, slack)
-│   │   ├── services/
-│   │   │   ├── emailService.ts     # Email scheduling & serverless execution
-│   │   │   ├── queueService.ts     # BullMQ queue management
-│   │   │   ├── rateLimiterService.ts# Redis Lua atomic rate limiting
-│   │   │   └── elasticService.ts   # Elasticsearch search service
-│   │   └── workers/
-│   │       ├── emailWorker.ts      # BullMQ background worker loop
-│   │       └── runWorker.ts        # Standalone worker runner
-│   └── tests/                      # Automated Vitest test suite (34 tests)
-└── frontend/
-    ├── package.json                # Frontend dependencies
-    ├── vite.config.ts              # Vite configuration & proxy
-    ├── tailwind.config.js          # Tailwind styling system
-    └── src/
-        ├── App.tsx                 # Main application routes
-        ├── components/             # React components (ComposeModal, Tables, Senders)
-        ├── context/                # Authentication context
-        ├── pages/                  # Dashboard, Login, Signup pages
-        └── services/               # Axios API client
-```
+### Backend (`backend/.env`)
+
+| Variable | Description | Default / Example |
+|---|---|---|
+| `PORT` | Backend HTTP port | `5000` |
+| `NODE_ENV` | Environment mode | `production` |
+| `DATABASE_URL` | MySQL connection string | `mysql://root:root@localhost:3306/reachinbox` |
+| `REDIS_URL` | Redis connection string | `redis://localhost:6379` |
+| `ELASTICSEARCH_URL` | Elasticsearch endpoint | `http://localhost:9200` |
+| `JWT_SECRET` | Secret key for JWT signing | `reachinbox_super_secret_jwt_key_2026` |
+| `SESSION_SECRET` | Secret key for sessions | `reachinbox_super_secret_session_key_2026` |
+| `FRONTEND_URL` | Whitelisted frontend origin | `http://localhost:5173` |
+| `BACKEND_URL` | Public backend URL | `http://localhost:5000` |
+| `WORKER_CONCURRENCY` | Concurrent worker jobs | `5` |
+| `MIN_EMAIL_DELAY_MS` | Minimum send delay (ms) | `2000` |
+| `MAX_EMAILS_PER_HOUR`| Hourly limit per sender | `200` |
+| `SMTP_PROVIDER` | `ethereal` or `real` | `ethereal` |
+| `GOOGLE_CLIENT_ID` | Google OAuth Client ID | Optional |
+| `GOOGLE_CLIENT_SECRET`| Google OAuth Client Secret | Optional |
+| `GOOGLE_CALLBACK_URL`| Google OAuth Redirect URI | `http://localhost:5000/api/auth/google/callback` |
+| `SLACK_CLIENT_ID` | Slack OAuth Client ID | Optional |
+| `SLACK_CLIENT_SECRET` | Slack OAuth Client Secret | Optional |
+| `SLACK_REDIRECT_URI` | Slack OAuth Redirect URI | `http://localhost:5000/api/slack/callback` |
 
 ---
 
-## Automated Test Suite (34 Tests Passing)
+## Automated Tests & Verification
+
+### Vitest Test Suite (34 Tests Passing)
 
 ```bash
 cd backend
@@ -269,17 +222,80 @@ npm test
       Tests  34 passed (34)
 ```
 
+### 1000+ Load Test Verification
+
+```bash
+cd backend
+npx tsx src/scripts/testLoad1000Live.ts
+```
+
+Verifies:
+- 1000+ delayed jobs enqueued atomically into Redis.
+- Zero synchronous blocking of the Express API.
+- BullMQ worker concurrency and delay spacing respected.
+- Zero dropped jobs and zero duplicate sends.
+
+### Restart Persistence Test
+
+```bash
+cd backend
+npx tsx src/scripts/testDelayedRestartLive.ts
+```
+
+Verifies:
+- Scheduled future job enters BullMQ as `DELAYED`.
+- Backend and worker processes are terminated.
+- Redis preserves job state across restart.
+- On restart, the same job fires at the exact scheduled time without duplication.
+
 ---
 
-## Security & Best Practices
+## Project Structure
 
-- **Zero Tracked Secrets**: All `.env` files and `.ethereal-account.json` are excluded via `.gitignore`.
-- **Password Hashing**: User passwords are saved as secure bcrypt hashes.
-- **JWT Authorization**: Authenticated API routes require valid signed Bearer tokens.
-- **Dynamic CORS Protection**: Whitelists configured frontend domains and Vercel preview URLs.
+```
+reachinbox-email-scheduler/
+├── vercel.json                     # Frontend Vercel SPA deployment configuration
+├── docker-compose.yml              # Containerized multi-service stack (MySQL, Redis, ES, Backend, Frontend)
+├── package.json                    # Monorepo root workspace configuration
+├── package-lock.json               # Committed dependency lockfile
+├── .gitignore                      # Security exclusions
+├── .env.example                    # Environment variable template
+├── README.md                       # Architecture & deployment documentation
+├── backend/
+│   ├── package.json                # Backend scripts & dependencies
+│   ├── tsconfig.json               # TypeScript compiler options
+│   ├── Dockerfile                  # Production backend container definition
+│   ├── prisma/
+│   │   └── schema.prisma           # MySQL schema (User, Sender, Campaign, ScheduledEmail, Slack)
+│   ├── src/
+│   │   ├── server.ts               # Production Express API & embedded BullMQ worker
+│   │   ├── app.ts                  # Express routes, CORS, error handling
+│   │   ├── config/                 # Redis, MySQL, Elasticsearch, Transporter configs
+│   │   ├── controllers/            # REST controllers (auth, emails, senders, slack)
+│   │   ├── services/
+│   │   │   ├── emailService.ts     # Email scheduling & campaign management
+│   │   │   ├── queueService.ts     # BullMQ queue client & job management
+│   │   │   ├── rateLimiterService.ts # Redis Lua atomic rate limiting
+│   │   │   └── elasticService.ts   # Elasticsearch indexing and search
+│   │   ├── workers/
+│   │   │   ├── emailWorker.ts      # BullMQ worker processor loop
+│   │   │   └── runWorker.ts        # Standalone worker runner
+│   │   └── scripts/                # Load tests & restart persistence verification scripts
+│   └── tests/                      # Automated Vitest test suite
+└── frontend/
+    ├── package.json                # Frontend dependencies
+    ├── vite.config.ts              # Vite configuration
+    ├── tailwind.config.js          # Tailwind styling system
+    └── src/
+        ├── App.tsx                 # Root routes & auth protection
+        ├── components/             # React components (ComposeModal, Tables, Header)
+        ├── context/                # AuthContext
+        ├── pages/                  # Dashboard, Login, Signup
+        └── services/               # Axios API client
+```
 
 ---
 
 ## License
 
-This project is open-source and available under the [MIT License](LICENSE).
+This project is submitted for the ReachInbox Software Development Intern assignment.

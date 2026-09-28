@@ -104,22 +104,6 @@ export function createApp(): Express {
   app.use('/api/slack', slackRouter);
   app.get('/api/queues/stats', getQueueStatsHandler);
 
-  // Vercel Cron Endpoint for serverless email dispatch
-  app.get('/api/cron/process-due', async (_req, res) => {
-    try {
-      const result = await EmailService.processDueScheduledEmails(30);
-      res.json({
-        success: true,
-        timestamp: new Date().toISOString(),
-        ...result,
-      });
-    } catch (err: any) {
-      res.status(500).json({
-        success: false,
-        error: err.message || 'Failed to process due emails',
-      });
-    }
-  });
 
   // Centralized Error Handling
   app.use(errorHandler);

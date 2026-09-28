@@ -6,11 +6,8 @@ dotenv.config();
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
 
-const vercelDomain = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
-const vercelBaseUrl = vercelDomain ? (vercelDomain.startsWith('http') ? vercelDomain : `https://${vercelDomain}`) : '';
-
-const defaultFrontend = process.env.FRONTEND_URL || vercelBaseUrl || 'http://localhost:5173';
-const defaultBackend = process.env.BACKEND_URL || vercelBaseUrl || 'http://localhost:5000';
+const defaultFrontend = process.env.FRONTEND_URL || 'http://localhost:5173';
+const defaultBackend = process.env.BACKEND_URL || 'http://localhost:5000';
 
 export const config = {
   port: parseInt(process.env.PORT || '5000', 10),

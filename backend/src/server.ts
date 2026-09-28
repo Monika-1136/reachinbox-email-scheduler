@@ -119,11 +119,9 @@ async function bootstrap() {
 
 export const app = createApp();
 
-if (!process.env.VERCEL) {
-  bootstrap().catch((err) => {
-    console.error('[Server] Fatal bootstrap error:', err);
-    process.exit(1);
-  });
-}
+bootstrap().catch((err) => {
+  console.error('[Server] Fatal bootstrap error:', err);
+  process.exit(1);
+});
 
 export default app;
